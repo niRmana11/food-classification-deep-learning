@@ -1,0 +1,33 @@
+# Global Configuration for SE4050 Food Classification Project
+# Fair Experimental Conditions Protocol
+
+project:
+  name: "food-classification-deep-learning"
+  seed: 42
+
+data:
+  dataset_name: "TBD" # e.g., Food-101 (subset) or similar
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  split_ratio:
+    train: 0.70
+    val: 0.15
+    test: 0.15
+  image_size: [224, 224] # Standard size across all 4 architectures
+  channels: 3
+  batch_size: 32
+
+training:
+  epochs: 25
+  early_stopping_patience: 5
+  reduce_lr_patience: 3
+  optimizer: "adam"
+  learning_rate: 0.001
+
+evaluation:
+  metrics:
+    - "accuracy"
+    - "precision"
+    - "recall"
+    - "f1_score"
+    - "confusion_matrix"
