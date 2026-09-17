@@ -1,0 +1,53 @@
+# Byte-compiled / optimized / virtual environment
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+ENV/
+*.env
+
+# Jupyter Notebook checkpoints and autosaves
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# IDE and OS metadata
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# DATASETS (Strict Rule: Do not commit image datasets)
+data/raw/*
+!data/raw/.gitkeep
+!data/raw/README.md
+data/processed/*
+!data/processed/.gitkeep
+*.zip
+*.tar.gz
+*.tar
+*.rar
+
+# MODEL WEIGHTS & CHECKPOINTS (Heavy binary files)
+*.h5
+*.hdf5
+*.keras
+*.pt
+*.pth
+*.onnx
+*.pkl
+*.joblib
+checkpoints/
+
+# LOGS & EXPERIMENT TRACKING
+wandb/
+runs/
+*.log
+tensorboard/
+
+
+.gemini/
+scratch/
