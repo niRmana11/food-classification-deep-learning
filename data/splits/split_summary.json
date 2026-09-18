@@ -1,0 +1,9 @@
+{
+  "dataset": "Food-101",
+  "num_classes": 101,
+  "total_images": 101000,
+  "seed": 42,
+  "train_images": 68175,
+  "val_images": 7575,
+  "test_images": 25250
+}
