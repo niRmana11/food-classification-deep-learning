@@ -1,450 +1,229 @@
 # SE4050 Deep Learning 2026 — Food Classification
 
-![Project Status](https://img.shields.io/badge/status-in%20progress-yellow)
-![Task](https://img.shields.io/badge/task-multiclass%20image%20classification-blue)
-![Models](https://img.shields.io/badge/models-4-green)
-
-## Project
-
-A supervised deep-learning project for **multi-class food image classification**, implementing and comparing four distinct CNN architectures.
-
-### Selected models
-
-1. **Custom CNN**
-2. **ResNet50**
-3. **MobileNetV2**
-4. **EfficientNetB0**
-
-### Team
-
-| Member           | Name      | Primary responsibility                               |
-| ---------------- | --------- | ---------------------------------------------------- |
-| 1 / Group Leader | Nirmana   | Dataset, EDA, preprocessing, Custom CNN, integration |
-| 2                | Matheesha | ResNet50                                             |
-| 3                | Kanushka  | MobileNetV2                                          |
-| 4                | Kaveesha  | EfficientNetB0, results aggregation                  |
+![Project Status](<https://img.shields.io/badge/status-dataset%20confirmed%20(Food--101)-green>)
+![Task](<https://img.shields.io/badge/task-multiclass%20image%20classification%20(101%20classes)-blue>)
+![Models](https://img.shields.io/badge/models-Custom%20CNN%20%7C%20ResNet50%20%7C%20MobileNetV2%20%7C%20EfficientNetB0-orange)
+![Dataset](<https://img.shields.io/badge/dataset-Food--101%20(101k%20images)-purple>)
 
 ---
 
-## Assignment
+## 1. Project Overview & Research Question
 
-**Module:** SE4050 – Deep Learning  
-**Institution:** BSc (Hons) in Information Technology  
-**Academic year:** 2026  
-**Submission deadline:** 30 September 2026
+This project investigates multi-class visual food recognition using deep convolutional neural networks. We implement, evaluate, and critically compare four distinct architectures under strictly controlled, fair experimental conditions to satisfy the requirements of module **SE4050 – Deep Learning (2026)** at **SLIIT**.
 
-The assignment requires a supervised-learning group to implement and compare at least four distinct deep-learning models/architectures and evaluate them under fair and comparable conditions.
+### Central Research Question
 
----
+> _"How do different CNN architectures—a baseline Custom CNN, ResNet50, MobileNetV2, and EfficientNetB0—compare for multi-class food image classification in terms of predictive performance, generalization, computational efficiency, model complexity, training stability, and classification error patterns?"_
 
-## Objective
+### Hypotheses Under Investigation
 
-The project aims to investigate how different CNN architectures perform on multi-class food image classification, considering:
-
-- Predictive performance
-- Generalization
-- Overfitting/underfitting
-- Convergence/training behaviour
-- Classification errors
-- Computational efficiency
-- Model complexity
-- Practical limitations
-
-The project will not rely on accuracy alone.
+1. **Transfer Learning vs. Scratch Baseline:** Pretrained backbones (ResNet50, MobileNetV2, EfficientNetB0) will generalize significantly better on high-variance food textures than the Custom CNN trained from scratch.
+2. **Efficiency vs. Performance:** MobileNetV2 will provide the lowest inference latency and smallest memory footprint, making it ideal for mobile/edge food-logging applications with minimal top-1 accuracy degradation.
+3. **Compound Scaling Efficiency:** EfficientNetB0 will achieve competitive or superior accuracy compared to ResNet50 while demanding substantially fewer parameters and lower training FLOPs.
+4. **Error Analysis & Confusion Clusters:** Visually proximate categories with fine-grained intra-class overlap (e.g., _steak_ vs. _filet mignon_, or _apple pie_ vs. _bread pudding_) will constitute the primary classification error modes.
 
 ---
 
-## Repository Structure
+## 2. Team Structure & Work Allocation
+
+| Member       | Name          | Role             | Primary Technical Responsibility                                                             | Target Model / Workstream                         |
+| :----------- | :------------ | :--------------- | :------------------------------------------------------------------------------------------- | :------------------------------------------------ |
+| **Member 1** | **Nirmana**   | **Group Leader** | Repo setup, Food-101 pipeline, Leakage-free split, EDA, Custom CNN architecture, Integration | **Custom CNN** (Designed from scratch with GAP)   |
+| **Member 2** | **Matheesha** | Team Member      | ResNet50 architecture, residual feature extraction, transfer learning & fine-tuning          | **ResNet50** (Deep Residual Learning)             |
+| **Member 3** | **Kanushka**  | Team Member      | MobileNetV2 architecture, inverted residual blocks, latency & edge benchmarking              | **MobileNetV2** (Lightweight / Edge-optimized)    |
+| **Member 4** | **Kaveesha**  | Team Member      | EfficientNetB0 architecture, compound scaling analysis, comparative results aggregation      | **EfficientNetB0** (Compound Coefficient Scaling) |
+
+---
+
+## 3. Dataset: Food-101
+
+- **Dataset Name:** Food-101
+- **Original Source:** ETH Zürich Computer Vision Lab
+- **Authors / Creators:** Lukas Bossard, Matthieu Guillaumin, Luc Van Gool (ECCV 2014)
+- **Official URL:** [https://data.vision.ee.ethz.ch/cvl/datasets_extra/food-101/](https://data.vision.ee.ethz.ch/cvl/datasets_extra/food-101/)
+- **Total Images:** 101,000 real-world RGB images
+- **Number of Classes:** 101 distinct food categories
+- **Class Balance:** Exactly 1,000 images per class at the global level
+- **Data Properties:** Extreme intra-class variance in presentation, background, lighting, and viewing angles. Training set intentionally retains ~20% natural label noise as documented by the original authors.
+
+### Canonical Data Split Protocol (Zero Data Leakage)
+
+To strictly satisfy assignment constraints and prevent data leakage:
+
+```text
+Food-101 (101,000 images)
+│
+├── Original Training Split (75,750 images — 750 / class)
+│   ├── ~90%  → Training Set (~68,175 images — ~675 / class) [Augmentation Applied]
+│   └── ~10%  → Validation Set (~7,575 images — ~75 / class) [Deterministic Preprocessing]
+│
+└── Original Test Split (25,250 images — 250 / class)
+    └── FINAL UNTOUCHED TEST SET (Completely unseen during all model and hyperparameter development)
+```
+
+> **STRICT PROTOCOL:** All data exploration, feature extraction, preprocessing decisions, model architectures, and hyperparameter tuning must rely **exclusively** on the training and validation splits. The 25,250 test images remain unseen and are evaluated **only once** during the final comparative assessment.
+
+_Note: Raw images are NOT committed to GitHub. See `data/README.md` for reproducible download and extraction instructions._
+
+---
+
+## 4. Controlled Experimental Protocol
+
+The SLIIT marking rubric requires all models to be evaluated under fair and comparable experimental conditions:
+
+- **Input Dimensions:** 224 × 224 pixels across all 4 architectures.
+- **Random Seed:** Synchronized to `42` for all data sampling, validation splitting, and weight initializations.
+- **Data Augmentation:** Applied **only** to the training split (random horizontal flip, slight rotation $\pm 10\%$, subtle zoom $\pm 10\%$). Validation and test splits are strictly deterministic.
+- **Model-Specific Preprocessing:**
+  - _Custom CNN:_ Direct scaling to $[0, 1]$ via `Rescaling(1./255)`.
+  - _ResNet50:_ Caffe-style zero-centered BGR scaling via `tf.keras.applications.resnet50.preprocess_input`.
+  - _MobileNetV2:_ Normalized to $[-1, 1]$ via `tf.keras.applications.mobilenet_v2.preprocess_input`.
+  - _EfficientNetB0:_ Native pass-through via `tf.keras.applications.efficientnet.preprocess_input`.
+- **Hardware Feasibility Benchmark:** Before launching full 25-epoch runs, a small benchmark is executed on Google Colab (T4 GPU) to verify GPU memory footprint, throughput, and lock the batch size (candidate: 32).
+
+---
+
+## 5. Evaluation Metrics & Critical Comparison
+
+Evaluation goes well beyond simple accuracy to satisfy the 30% Critical Analysis and 10% Model Comparison rubrics:
+
+### 1. Classification Performance
+
+- **Top-1 Accuracy** & **Top-5 Accuracy**
+- **Precision, Recall, and F1-Score** (Macro and Weighted averages)
+- **High-Resolution Confusion Matrix** (identifying inter-class confusion patterns)
+- **Classification Error Analysis** (top 5 most confused class pairs)
+
+### 2. Computational & Complexity Metrics
+
+- **Total Parameters vs. Trainable Parameters**
+- **Model Storage Footprint (MB)** on disk
+- **Training Time** (total seconds and seconds per epoch)
+- **Inference Latency** (average milliseconds per image over 1,000 test samples)
+- **Peak GPU Memory Allocation (VRAM MB)** during training
+
+---
+
+## 6. Standardized Experiment Artifacts
+
+Every member must log and commit reproducible experiment outputs under their respective directory in `results/<model_name>/`:
+
+```text
+results/<model_name>/
+├── config.yaml                   # Exact hyperparameters and run metadata
+├── history.csv                   # Per-epoch loss, accuracy, val_loss, val_accuracy
+├── model_summary.txt             # Architecture layer breakdown and parameter counts
+├── training_curves.png           # Dual-plot training vs. validation loss & accuracy
+├── confusion_matrix.png          # Normalized 101-class confusion matrix plot
+├── classification_report.json    # Complete per-class precision, recall, and F1 metrics
+└── metrics.json                  # Top-1 acc, Top-5 acc, latency, disk size, training time
+```
+
+---
+
+## 7. Repository Structure
 
 ```text
 food-classification-deep-learning/
 │
-├── README.md
-├── requirements.txt
-├── .gitignore
+├── README.md                     # Comprehensive project guide and reproduction manual
+├── requirements.txt              # Pinned Python package dependencies
+├── .gitignore                    # Prevents dataset, weight, and cache commits
 │
 ├── configs/
+│   └── config.yaml               # Shared global configuration (seed, split, hyperparams)
+│
+├── data/
+│   ├── README.md                 # Dataset acquisition and extraction guide
+│   ├── raw/                      # Downloaded Food-101 files (git-ignored)
+│   ├── processed/                # Preprocessed images / cached tf.data (git-ignored)
+│   └── splits/                   # Deterministic train/val/test file manifests (.txt / .json)
+│
 ├── notebooks/
+│   ├── 01_food101_eda.ipynb      # Complete EDA: class counts, dimensions, quality, noise
+│   ├── 02_gpu_benchmark.ipynb    # GPU memory, throughput, and batch size feasibility check
+│   ├── 03_custom_cnn.ipynb       # Custom CNN baseline implementation & training (Nirmana)
+│   ├── 04_resnet50.ipynb         # ResNet50 transfer learning & fine-tuning (Matheesha)
+│   ├── 05_mobilenetv2.ipynb      # MobileNetV2 transfer learning & fine-tuning (Kanushka)
+│   ├── 06_efficientnetb0.ipynb   # EfficientNetB0 transfer learning & tuning (Kaveesha)
+│   └── 07_comparative_eval.ipynb # Cross-model evaluation, radar charts & critical analysis
+│
 ├── src/
+│   ├── __init__.py
 │   ├── data/
+│   │   ├── __init__.py
+│   │   ├── download_food101.py   # Script to download and verify Food-101 archive
+│   │   └── split_food101.py      # Canonical 90/10 train-val split generator (seed locked)
 │   ├── preprocessing/
+│   │   ├── __init__.py
+│   │   ├── augmentations.py      # Training-only augmentation pipeline
+│   │   └── data_loader.py        # Model-specific preprocessing and tf.data generators
 │   ├── models/
+│   │   ├── __init__.py
+│   │   ├── custom_cnn.py         # Baseline CNN (4 Conv blocks + GAP + Dropout + Softmax)
+│   │   ├── resnet50.py           # ResNet50 transfer learning builder
+│   │   ├── mobilenetv2.py        # MobileNetV2 transfer learning builder
+│   │   └── efficientnetb0.py     # EfficientNetB0 transfer learning builder
 │   ├── training/
-│   └── evaluation/
+│   │   ├── __init__.py
+│   │   ├── trainer.py            # Standardized model compilation, fit loop, and callbacks
+│   │   └── callbacks.py          # EarlyStopping, ReduceLROnPlateau, CSVLogger
+│   ├── evaluation/
+│   │   ├── __init__.py
+│   │   ├── metrics.py            # Classification report, top-k accuracy calculation
+│   │   ├── benchmark_latency.py  # Inference speed and throughput profiler
+│   │   └── visualize.py          # Confusion matrix and training curve plotting utilities
+│   └── utils/
+│       ├── __init__.py
+│       ├── config_parser.py      # YAML configuration loader
+│       └── seed.py               # Deterministic seed locker (numpy, python, tf)
 │
 ├── results/
-│   ├── custom_cnn/
-│   ├── resnet50/
-│   ├── mobilenetv2/
-│   └── efficientnetb0/
+│   ├── custom_cnn/               # Member 1 evaluation artifacts
+│   ├── resnet50/                 # Member 2 evaluation artifacts
+│   ├── mobilenetv2/              # Member 3 evaluation artifacts
+│   └── efficientnetb0/           # Member 4 evaluation artifacts
 │
 ├── report/
+│   └── README.md                 # Academic report drafting guidelines (SLIIT 10 sections)
 └── presentation/
-```
-
-The exact structure may be adjusted as development progresses.
-
----
-
-## Dataset
-
-**Dataset: TBD**
-
-The selected dataset must be:
-
-- Authentic and real-world
-- Sufficiently complex
-- Multi-class
-- Suitable for deep learning
-- Publicly accessible
-- Properly licensed/citable
-- Not taken from a module lecture, laboratory exercise or end-to-end tutorial
-
-### Dataset documentation
-
-Once selected, add:
-
-- Dataset name
-- Original source
-- Creator
-- License
-- URL
-- Dataset version
-- Number of images
-- Number of classes
-- Class distribution
-- Download/access instructions
-- Known limitations
-
-The dataset itself should generally **not** be committed to this repository. Store access/download instructions instead.
-
----
-
-## Development and Training
-
-### Local machines
-
-The team has:
-
-- GTX 1050 laptop
-- MX130 laptop
-- i5 8th-generation integrated-graphics laptop
-- MacBook Air M1
-
-These machines are mainly used for development, EDA, debugging and small experiments.
-
-### Cloud
-
-Full training can use free cloud notebook environments such as:
-
-- Google Colab
-- Kaggle Notebooks
-
-Cloud hardware availability and usage limits can vary, so all final experiment configurations and outputs must be saved.
-
----
-
-## Experimental Principles
-
-All models should be evaluated using a fair and documented protocol.
-
-Where practical, use the same:
-
-- Dataset split
-- Class mapping
-- Image preprocessing
-- Augmentation policy
-- Test set
-- Evaluation metrics
-- Experimental procedure
-- Random seed strategy
-
-The test set must remain unseen until final evaluation.
-
----
-
-## Evaluation
-
-Primary classification metrics:
-
-- Accuracy
-- Precision
-- Recall
-- F1-score
-- Confusion matrix
-- ROC-AUC where appropriate for the multi-class setting
-
-Additional comparison:
-
-- Training curves
-- Parameter count
-- Training time
-- Inference time where feasible
-- Model size where feasible
-
----
-
-## Model Strategy
-
-### Custom CNN
-
-A CNN designed and trained by the team as a baseline.
-
-### ResNet50
-
-A residual CNN using transfer learning initially, with fine-tuning if appropriate.
-
-### MobileNetV2
-
-A lightweight CNN using transfer learning, with particular attention to efficiency and model complexity.
-
-### EfficientNetB0
-
-An efficient modern CNN using transfer learning, with analysis of predictive performance and computational trade-offs.
-
-Exact architecture and hyperparameter decisions will be documented in `configs/` and the final report.
-
----
-
-## Git Workflow
-
-### Branch naming
-
-```text
-feature/<member>-<task>
-fix/<short-description>
-docs/<short-description>
-exp/<short-description>
-```
-
-Examples:
-
-```text
-feature/nirmana-custom-cnn
-feature/matheesha-resnet50
-feature/kanushka-mobilenetv2
-feature/kaveesha-efficientnetb0
-docs/dataset-eda
-fix/preprocessing-leakage
-```
-
-### Workflow
-
-```text
-main
-  ↓
-create feature branch
-  ↓
-implement/test
-  ↓
-commit
-  ↓
-push branch
-  ↓
-Pull Request
-  ↓
-review
-  ↓
-merge into main
-```
-
-Avoid substantial direct commits to `main`.
-
-### Commit messages
-
-Use:
-
-```text
-<type>: <short description>
-```
-
-Examples:
-
-```text
-feat: implement ResNet50 training pipeline
-exp: run MobileNetV2 baseline
-fix: prevent test data leakage
-docs: add dataset documentation
-chore: update training dependencies
-```
-
-Avoid messages such as:
-
-```text
-update
-changes
-done
-final
-stuff
+    └── README.md                 # 10-minute YouTube presentation script and slides
 ```
 
 ---
 
-## GitHub Issues and Project Board
+## 8. Git Workflow & Collaboration Rules
 
-Use Issues to track work.
+### Branch Naming Convention
 
-Suggested labels:
+- **Member 1 (Nirmana):** `feature/nirmana-custom-cnn`
+- **Member 2 (Matheesha):** `feature/matheesha-resnet50`
+- **Member 3 (Kanushka):** `feature/kanushka-mobilenetv2`
+- **Member 4 (Kaveesha):** `feature/kaveesha-efficientnetb0`
+- **Bug Fixes / Documentation:** `fix/<short-description>` or `docs/<short-description>`
 
-- `dataset`
-- `preprocessing`
-- `model`
-- `experiment`
-- `evaluation`
-- `report`
-- `documentation`
-- `bug`
-- `urgent`
+### Pull Request & Review Protocol
 
-Recommended Project columns:
+1. Create and switch to your feature branch before writing code.
+2. Commit with meaningful conventional messages (`feat:`, `fix:`, `docs:`, `exp:`, `chore:`).
+3. Push branch to GitHub and open a Pull Request (PR) into `main`.
+4. Group Leader (Nirmana) reviews the PR for code cleanliness, compliance with the shared configuration, and absence of data leakage before merging.
+5. **Direct pushing to `main` is strictly prohibited.**
 
-```text
-Backlog → To Do → In Progress → Review → Done
-```
+### Contribution Traceability (Assignment Mandate)
 
----
-
-## Collaboration Rules
-
-Because the group is working remotely:
-
-### WhatsApp
-
-Use for:
-
-- Short updates
-- Coordination
-- Questions
-- Urgent problems
-- Meeting scheduling
-
-### GitHub
-
-Use as the source of truth for:
-
-- Code
-- Results
-- Configurations
-- Documentation
-- Issues
-- Pull Requests
-- Decisions
-
-Important decisions made in WhatsApp should be recorded in the repository.
+- Every member must make **regular, weekly commits and pushes** from their own GitHub account.
+- Last-minute or trivial bulk commits are penalized according to the marking scheme.
 
 ---
 
-## Experiment Records
+## 9. Academic Submission Checklist
 
-Every meaningful experiment should record:
-
-- Experiment ID
-- Model
-- Dataset/split version
-- Image size
-- Batch size
-- Learning rate
-- Optimizer
-- Epochs
-- Random seed
-- Transfer-learning/fine-tuning status
-- Validation metrics
-- Test metrics after finalization
-- Training time
-- Notes
-
-Example:
-
-```text
-resnet50_baseline_v01
-mobilenetv2_baseline_v01
-efficientnetb0_finetune_v02
-customcnn_baseline_v01
-```
-
-Do not overwrite previous experiment results.
-
----
-
-## Results
-
-Final results will be stored under:
-
-```text
-results/
-├── custom_cnn/
-├── resnet50/
-├── mobilenetv2/
-└── efficientnetb0/
-```
-
-Each model should retain sufficient evidence to reproduce the reported result.
-
----
-
-## Report
-
-The final report follows the assignment structure:
-
-1. Introduction and Problem Definition
-2. Background and Related Work
-3. Dataset Description and Exploratory Data Analysis
-4. Data Preprocessing and Feature Engineering
-5. Experimental Design
-6. Model Architectures
-7. Results and Model Comparison
-8. Critical Analysis and Discussion
-9. Conclusion
-10. References
-
-The critical-analysis section is especially important because it represents 30% of the supervised-learning rubric.
-
----
-
-## Important Academic/Submission Rules
-
-Before final submission, verify:
-
-- Dataset source/license is acknowledged
-- Pretrained models are acknowledged
-- Libraries and external resources are acknowledged
-- Relevant literature is cited
-- AI-assisted content is acknowledged where required
-- All four models are documented
-- Test data was not used for tuning
-- All members made meaningful GitHub contributions
-- Each member pushed at least once per week
-- The repository contains setup/dependency information
-- Submission files follow the assignment instructions
-
----
-
-## Team Completion Checklist
-
-- [ ] Dataset selected
-- [ ] Dataset documented
-- [ ] EDA completed
-- [ ] Preprocessing completed
-- [ ] Custom CNN completed
-- [ ] ResNet50 completed
-- [ ] MobileNetV2 completed
-- [ ] EfficientNetB0 completed
-- [ ] Final experiments completed
-- [ ] Evaluation completed
-- [ ] Error analysis completed
-- [ ] Computational comparison completed
-- [ ] Critical analysis completed
-- [ ] Report completed
-- [ ] YouTube video completed
-- [ ] GitHub finalized
-- [ ] GradeScope code submitted
-- [ ] CourseWeb ZIP finalized
-- [ ] Final submission checked
-
----
-
-## Project Principle
-
-> **Work independently, integrate centrally, document everything, and compare fairly.**
-
-Each member owns a primary workstream, but all members must understand the complete project for the viva.
+- [ ] Unseen test set evaluated only once after all hyperparameter decisions are finalized.
+- [ ] No raw image datasets or bulky weights (`.h5`, `.keras`, `.pt`) committed to GitHub.
+- [ ] Complete `requirements.txt` tested across local machines and Google Colab.
+- [ ] Complete evaluation outputs committed to `results/` for all 4 architectures.
+- [ ] Turnitin similarity report generated (file named with Group Leader registration number).
+- [ ] Source code submitted to GradeScope.
+- [ ] 10-minute presentation video recorded, uploaded to YouTube, and link tested.
+- [ ] CourseWeb submission archive (`<leader_reg_num>.zip`) prepared containing `Members.txt`, `Report.pdf`, `Turnitin_report.pdf`, and `Submission.txt`.
