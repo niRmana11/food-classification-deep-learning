@@ -192,7 +192,177 @@ food-classification-deep-learning/
 
 ---
 
-## 8. Git Workflow & Collaboration Rules
+## 8. Complete Setup & Execution Guide (Local & Google Colab)
+
+This section provides reproducible, step-by-step instructions for all team members on both local development machines and Google Colab cloud GPU environments.
+
+### 8.1 End-to-End Execution Flow
+```text
+1. Clone Repository & Setup Virtual Environment
+                      │
+2. Download & Extract Food-101 Dataset (~5GB)
+   (via: python -m src.data.download_food101)
+                      │
+3. Read Canonical Split Manifests
+   (data/splits/train.txt, val.txt, test.txt)
+                      │
+4. Load & Preprocess Batches via Shared Factory
+   (from src.preprocessing.data_loader import get_food101_datasets)
+                      │
+5. Train Model & Log Metrics on Colab T4 GPU
+   (Custom CNN | ResNet50 | MobileNetV2 | EfficientNetB0)
+                      │
+6. Save Standard Artifacts into results/<model_name>/
+                      │
+7. Submit Pull Request to main for Group Leader Review
+```
+
+---
+
+### 8.2 Environment Setup
+
+#### Option A: Local Development (Windows / macOS / Linux)
+Recommended for code editing, EDA, and local debugging:
+```powershell
+# 1. Clone the repository
+git clone https://github.com/niRmana11/food-classification-deep-learning.git
+cd food-classification-deep-learning
+
+# 2. Create and activate a virtual environment
+python -m venv venv
+.\venv\Scripts\Activate.ps1    # On Windows PowerShell
+# source venv/bin/activate     # On macOS / Linux
+
+# 3. Upgrade pip and install dependencies
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+#### Option B: Google Colab Setup (Cloud T4 GPU)
+Recommended for model training. Add this self-healing cell at the top of every Colab notebook:
+```python
+# Cell 1: Environment Setup & Automatic Git Sync
+import os, sys
+
+REPO_NAME = "food-classification-deep-learning"
+REPO_URL = "https://github.com/niRmana11/food-classification-deep-learning.git"
+
+if 'google.colab' in sys.modules:
+    print("[INFO] Running in Google Colab environment.")
+    if not os.path.exists(f"/content/{REPO_NAME}"):
+        !git clone {REPO_URL}
+        %cd /content/{REPO_NAME}
+    else:
+        %cd /content/{REPO_NAME}
+        !git pull origin main
+    
+    if f"/content/{REPO_NAME}" not in sys.path:
+        sys.path.insert(0, f"/content/{REPO_NAME}")
+    
+    import tensorflow as tf
+    gpus = tf.config.list_physical_devices('GPU')
+    if gpus:
+        print(f"[SUCCESS] GPU detected: {gpus[0].name}")
+        !nvidia-smi --query-gpu=name,memory.total,memory.free --format=csv
+    else:
+        print("[WARNING] No GPU detected! Go to: Runtime -> Change runtime type -> T4 GPU")
+```
+
+---
+
+### 8.3 Dataset Acquisition & Verification
+
+The Food-101 archive is ~5GB containing 101,000 images. **Never commit images to GitHub.**
+
+1. **Download & Extract Dataset:**
+   Run this single command inside the project root:
+   ```bash
+   python -m src.data.download_food101
+   ```
+   - Automatically downloads `food-101.tar.gz` from ETH Zürich.
+   - Extracts images into `data/raw/food-101/images/`.
+   - Safely skips downloading if images are already present.
+
+2. **Canonical Split Manifests:**
+   The deterministic split manifests are stored in `data/splits/`:
+   - `train.txt`: 68,175 image paths (exactly 675 images per class — 90% of training pool).
+   - `val.txt`: 7,575 image paths (exactly 75 images per class — 10% of training pool).
+   - `test.txt`: 25,250 image paths (unseen final evaluation set).
+   - `classes.txt`: Alphabetical list of all 101 classes.
+   - `split_summary.json`: Metadata summary and validation statistics.
+
+   *(To regenerate these manifests with locked seed 42, run: `python -m src.data.split_food101`).*
+
+---
+
+### 8.4 Using the Shared Preprocessing Pipeline
+
+All team members must load datasets using the central factory function in `src/preprocessing/data_loader.py` to maintain experimental integrity:
+
+```python
+from src.preprocessing.data_loader import get_food101_datasets
+
+# Available model_type options: 'custom_cnn', 'resnet50', 'mobilenetv2', 'efficientnetb0'
+train_ds, val_ds, test_ds = get_food101_datasets(
+    data_dir="data/raw/food-101",
+    splits_dir="data/splits",
+    model_type="resnet50",     # Specify your assigned model architecture!
+    image_size=(224, 224),     # Standardized input resolution
+    batch_size=32              # Locked by GPU feasibility benchmark
+)
+```
+
+#### Pipeline Capabilities:
+- **Model-Specific Scaling:**
+  - `custom_cnn`: Scales pixel values to $[0.0, 1.0]$ via `Rescaling(1./255)`.
+  - `resnet50`: Zero-centered BGR mean subtraction via Caffe formula.
+  - `mobilenetv2`: Normalizes pixel values into $[-1.0, 1.0]$.
+  - `efficientnetb0`: Native pass-through (handled internally by EfficientNet).
+- **Training-Only Augmentation:** Applied exclusively on `train_ds` (random horizontal flip, $\pm 5\%$ rotation, $\pm 10\%$ zoom). `val_ds` and `test_ds` remain strictly deterministic.
+- **Hardware Optimization:** Uses multithreaded I/O parsing and `.prefetch(tf.data.AUTOTUNE)`.
+
+---
+
+### 8.5 GPU Feasibility Benchmark Results
+
+The pipeline was validated on a Google Colab NVIDIA T4 GPU (16GB VRAM) running ResNet50 (the heaviest backbone):
+- **Peak VRAM Consumed:** 4,217 MB / 15,360 MB (27.5% capacity)
+- **Data Throughput:** 77.7 images/second
+- **Estimated Full Epoch:** ~18.7 minutes
+- **Out-of-Memory (OOM) Status:** Verified 100% safe. `batch_size: 32` is officially locked.
+
+---
+
+### 8.6 Team Member Training Workflow
+
+Each member independently develops and trains their assigned architecture:
+
+```powershell
+# 1. Ensure you are on latest main
+git checkout main
+git pull origin main
+
+# 2. Switch to your feature branch
+git checkout -b feature/<member>-<model>
+# Example: git checkout -b feature/matheesha-resnet50
+
+# 3. Develop model architecture in src/models/<model>.py
+# 4. Train in Colab using notebooks/0<number>_<model>.ipynb
+
+# 5. Export and save results into results/<model>/
+#    (history.csv, model_summary.txt, training_curves.png, confusion_matrix.png, metrics.json)
+
+# 6. Commit changes and push
+git add src/models/ notebooks/ results/
+git commit -m "feat: implement <model_name> training pipeline and log baseline artifacts"
+git push -u origin feature/<member>-<model>
+
+# 7. Open a Pull Request (PR) on GitHub for Leader Review
+```
+
+---
+
+## 9. Git Workflow & Collaboration Rules
 
 ### Branch Naming Convention
 
@@ -217,7 +387,7 @@ food-classification-deep-learning/
 
 ---
 
-## 9. Academic Submission Checklist
+## 10. Academic Submission Checklist
 
 - [ ] Unseen test set evaluated only once after all hyperparameter decisions are finalized.
 - [ ] No raw image datasets or bulky weights (`.h5`, `.keras`, `.pt`) committed to GitHub.
@@ -227,3 +397,4 @@ food-classification-deep-learning/
 - [ ] Source code submitted to GradeScope.
 - [ ] 10-minute presentation video recorded, uploaded to YouTube, and link tested.
 - [ ] CourseWeb submission archive (`<leader_reg_num>.zip`) prepared containing `Members.txt`, `Report.pdf`, `Turnitin_report.pdf`, and `Submission.txt`.
+
