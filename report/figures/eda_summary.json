@@ -1,0 +1,14 @@
+{
+  "total_images": 101000,
+  "num_classes": 101,
+  "distribution": "Perfectly balanced (1,000 images / class)",
+  "splits": {
+    "train": 68175,
+    "validation": 7575,
+    "test": 25250
+  },
+  "color_channels": 3,
+  "common_dimensions": "512x512, 384x512 (scaled to 224x224)",
+  "corrupt_files_detected": 0,
+  "label_noise_property": "Training set contains ~20% natural noise; Test set is cleaned"
+}
