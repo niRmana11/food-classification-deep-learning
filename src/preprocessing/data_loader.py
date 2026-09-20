@@ -60,6 +60,13 @@ def create_food101_dataset(
     """
     images_base = Path(images_dir)
     samples = _load_manifest_file(Path(manifest_file))
+
+    if is_training:
+        # Deterministically pre-shuffle manifest samples with seed 42 so all 101 classes
+        # are uniformly distributed across training batches (prevents sequential forgetting
+        # caused by class-sorted manifests).
+        import random
+        random.Random(42).shuffle(samples)
     
     class_to_idx = {name: idx for idx, name in enumerate(class_names)}
 
