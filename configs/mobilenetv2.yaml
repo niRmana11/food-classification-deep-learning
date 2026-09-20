@@ -1,0 +1,64 @@
+# ==============================================================================
+# SE4050 Food Classification — MobileNetV2 Configuration
+# Member 3: Kanushka
+# Model: MobileNetV2 (Lightweight Inverted Residual CNN)
+# ==============================================================================
+
+model:
+  name: "MobileNetV2"
+  architecture: "Inverted Residuals with Linear Bottlenecks"
+  weights: "imagenet"
+  include_top: false
+  input_shape: [224, 224, 3]
+  num_classes: 101
+  dropout_rate: 0.2
+  head:
+    pooling: "GlobalAveragePooling2D"
+    classifier: "Dense(101, activation='softmax')"
+
+dataset:
+  name: "Food-101"
+  data_dir: "data/raw/food-101"
+  splits_dir: "data/splits"
+  image_size: [224, 224]
+  batch_size: 32
+  seed: 42
+  normalization: "normalize_neg1_to_pos1"  # tf.keras.applications.mobilenet_v2.preprocess_input
+
+phase1_feature_extraction:
+  epochs: 8
+  optimizer: "adam"
+  learning_rate: 0.001
+  freeze_base: true
+  early_stopping:
+    monitor: "val_loss"
+    patience: 4
+    restore_best_weights: true
+  reduce_lr:
+    monitor: "val_loss"
+    factor: 0.2
+    patience: 2
+    min_lr: 0.00001
+  checkpoint: "results/mobilenetv2/best_phase1.keras"
+
+phase2_fine_tuning:
+  epochs: 12
+  optimizer: "adam"
+  learning_rate: 0.00001
+  fine_tune_at_layer: 120  # Unfreezes top inverted residual blocks (14-16)
+  freeze_batchnorm: true  # Prevents moving statistics instability
+  early_stopping:
+    monitor: "val_loss"
+    patience: 5
+    restore_best_weights: true
+  reduce_lr:
+    monitor: "val_loss"
+    factor: 0.2
+    patience: 2
+    min_lr: 0.0000001
+  checkpoint: "results/mobilenetv2/best_model.keras"
+
+evaluation:
+  test_images_count: 25250
+  latency_benchmark_samples: 1000
+  export_dir: "results/mobilenetv2"
