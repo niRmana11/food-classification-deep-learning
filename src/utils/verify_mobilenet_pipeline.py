@@ -24,6 +24,8 @@ def verify_pipeline():
     print("=" * 70)
     
     root = Path(__file__).resolve().parent.parent.parent
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
     splits_dir = root / "data" / "splits"
     config_path = root / "configs" / "config.yaml"
 
