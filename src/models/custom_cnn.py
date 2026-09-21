@@ -79,8 +79,12 @@ def build_custom_cnn(
     model.compile(
         optimizer=optimizer,
         loss="sparse_categorical_crossentropy",
-        metrics=["accuracy"]
+        metrics=[
+            "accuracy",
+            tf.keras.metrics.SparseTopKCategoricalAccuracy(k=5, name="top_5_accuracy")
+        ]
     )
+
 
     return model
 
