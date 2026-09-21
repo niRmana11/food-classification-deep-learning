@@ -1,0 +1,11 @@
+{
+  "model_name": "Custom_CNN",
+  "total_parameters": 678085,
+  "trainable_parameters": 675653,
+  "training_time_seconds": 14339.84,
+  "inference_latency_ms_per_image": 5.9,
+  "final_val_loss": 1.6548,
+  "final_val_accuracy": 0.5723,
+  "final_test_loss": 1.4441,
+  "final_test_accuracy": 0.6169
+}
