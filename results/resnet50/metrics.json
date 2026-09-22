@@ -1,0 +1,20 @@
+{
+  "model_name": "ResNet50",
+  "total_parameters": 23802853,
+  "trainable_parameters": 9130085,
+  "model_size_mb": 98.4,
+  "training_time_seconds": 16481.0,
+  "avg_epoch_time_seconds": 824.05,
+  "inference_latency_ms_per_image": 10.98,
+  "val_top1_accuracy": 0.6947,
+  "val_top5_accuracy": 0.8865,
+  "final_val_loss": 1.3744,
+  "final_val_accuracy": 0.6947,
+  "test_top1_accuracy": 0.7354,
+  "test_top5_accuracy": 0.9202,
+  "final_test_loss": 1.111,
+  "final_test_accuracy": 0.7354,
+  "test_macro_precision": 0.7411,
+  "test_macro_recall": 0.7354,
+  "test_macro_f1": 0.7355
+}
