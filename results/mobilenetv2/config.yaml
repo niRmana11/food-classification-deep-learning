@@ -1,0 +1,11 @@
+batch_size: 32
+fine_tune_at_layer: 120
+image_size:
+- 224
+- 224
+loss: sparse_categorical_crossentropy
+model: MobileNetV2
+phase1_epochs: 8
+phase1_optimizer: Adam(lr=0.001)
+phase2_epochs: 12
+phase2_optimizer: Adam(lr=1e-05)
