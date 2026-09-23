@@ -1,0 +1,74 @@
+# SE4050 Deep Learning Benchmark Configuration
+# Architecture: ResNet50 (Transfer Learning & Fine-Tuning)
+# Student: Matheesha (Member 2)
+
+model:
+  name: "ResNet50"
+  family: "Deep Residual Network"
+  input_shape: [224, 224, 3]
+  num_classes: 101
+  weights_initialization: "imagenet"
+  head:
+    pooling: "GlobalAveragePooling2D"
+    batch_norm: true
+    dropout: 0.3
+    dense_units: 101
+    activation: "softmax"
+
+dataset:
+  name: "Food-101"
+  total_samples: 101000
+  train_samples: 68175 # 75% of 75,750 development set
+  val_samples: 7575   # 25% of 75,750 development set
+  test_samples: 25250 # Unseen held-out evaluation test set
+  batch_size: 32
+  random_seed: 42
+  preprocessing: "caffe_bgr_subtraction"
+
+training:
+  phase1_feature_extraction:
+    status: "completed"
+    epochs: 6
+    optimizer: "Adam"
+    learning_rate: 0.001
+    trainable_backbone: false
+    loss: "SparseCategoricalCrossentropy"
+    metrics: ["accuracy", "top_5_accuracy"]
+    best_val_loss: 1.6720
+    best_val_accuracy: 0.6131
+    best_val_top5_accuracy: 0.8465
+
+  phase2_fine_tuning:
+    status: "completed"
+    total_epochs: 20
+    fine_tune_epochs: 14 # Epochs 7 through 20
+    unfreeze_from_layer: "conv5_block1_out" # Stage 5 residual blocks unfrozen
+    backbone_batch_norm_frozen: true
+    optimizer: "Adam"
+    initial_learning_rate: 0.00001 # 1e-5
+    reduced_learning_rate: 0.000002 # 2e-6 (reduced at epoch 18 via ReduceLROnPlateau)
+    loss: "SparseCategoricalCrossentropy"
+    metrics: ["accuracy", "top_5_accuracy"]
+    best_val_loss: 1.3744
+    best_val_accuracy: 0.6947
+    best_val_top5_accuracy: 0.8865
+
+regularization:
+  dropout_rate: 0.3
+  batch_normalization: true
+  early_stopping:
+    monitor: "val_loss"
+    patience: 5
+    restore_best_weights: true
+  reduce_lr_on_plateau:
+    monitor: "val_loss"
+    factor: 0.2
+    patience: 3
+    min_lr: 1e-7
+
+augmentation:
+  pipeline: "Keras Sequential Layers"
+  random_flip: "horizontal"
+  random_rotation: 0.1
+  random_zoom: 0.1
+  random_contrast: 0.1
