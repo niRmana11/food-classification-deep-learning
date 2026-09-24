@@ -35,3 +35,5 @@
 [14] F. Chollet *et al.*, "Keras: Deep Learning for Humans," GitHub repository, 2015. [Online]. Available: https://github.com/keras-team/keras.
 
 [15] C. Szegedy *et al.*, "Going Deeper with Convolutions," in *Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)*, Boston, MA, USA, Jun. 2015, pp. 1–9. doi: [10.1109/CVPR.2015.7298594](https://doi.org/10.1109/CVPR.2015.7298594).
+
+[16] A. G. Howard *et al.*, "MobileNets: Efficient Convolutional Neural Networks for Mobile Vision Applications," *arXiv preprint arXiv:1704.04861*, Apr. 2017. [Online]. Available: https://arxiv.org/abs/1704.04861.
