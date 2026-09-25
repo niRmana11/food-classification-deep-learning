@@ -1,0 +1,32 @@
+model_name: EfficientNetB0
+seed: 42
+image_size:
+- 224
+- 224
+batch_size: 32
+preprocessing: efficientnet.preprocess_input (pass-through, expects [0,255])
+augmentation: 'train split only: RandomFlip(horizontal), RandomRotation(0.05), RandomZoom(0.10)'
+optimizer: adam
+loss: sparse_categorical_crossentropy
+phase1:
+  epochs_max: 8
+  learning_rate: 0.001
+  backbone: frozen
+  hardware: Google Colab NVIDIA T4
+phase2:
+  epochs_max: 10
+  learning_rate: 1.0e-05
+  unfrozen:
+  - block6
+  - block7
+  - top_conv
+  batchnorm: frozen
+  hardware: Google Colab NVIDIA T4
+early_stopping:
+  monitor: val_loss
+  patience: 5
+  restore_best_weights: true
+reduce_lr:
+  monitor: val_loss
+  factor: 0.2
+  patience: 2

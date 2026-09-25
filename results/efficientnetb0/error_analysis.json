@@ -1,0 +1,110 @@
+{
+  "top_confused_pairs": [
+    {
+      "true_class": "steak",
+      "predicted_as": "filet_mignon",
+      "confusion_rate": 0.168
+    },
+    {
+      "true_class": "beef_tartare",
+      "predicted_as": "tuna_tartare",
+      "confusion_rate": 0.12
+    },
+    {
+      "true_class": "steak",
+      "predicted_as": "prime_rib",
+      "confusion_rate": 0.112
+    },
+    {
+      "true_class": "chocolate_cake",
+      "predicted_as": "chocolate_mousse",
+      "confusion_rate": 0.112
+    },
+    {
+      "true_class": "filet_mignon",
+      "predicted_as": "steak",
+      "confusion_rate": 0.112
+    },
+    {
+      "true_class": "apple_pie",
+      "predicted_as": "bread_pudding",
+      "confusion_rate": 0.092
+    },
+    {
+      "true_class": "frozen_yogurt",
+      "predicted_as": "ice_cream",
+      "confusion_rate": 0.092
+    },
+    {
+      "true_class": "fried_rice",
+      "predicted_as": "risotto",
+      "confusion_rate": 0.092
+    },
+    {
+      "true_class": "falafel",
+      "predicted_as": "crab_cakes",
+      "confusion_rate": 0.088
+    },
+    {
+      "true_class": "club_sandwich",
+      "predicted_as": "grilled_cheese_sandwich",
+      "confusion_rate": 0.084
+    }
+  ],
+  "worst_recall_classes": [
+    {
+      "class": "steak",
+      "recall": 0.48,
+      "f1": 0.5139
+    },
+    {
+      "class": "huevos_rancheros",
+      "recall": 0.512,
+      "f1": 0.5818
+    },
+    {
+      "class": "apple_pie",
+      "recall": 0.524,
+      "f1": 0.5251
+    },
+    {
+      "class": "foie_gras",
+      "recall": 0.528,
+      "f1": 0.5523
+    },
+    {
+      "class": "ceviche",
+      "recall": 0.536,
+      "f1": 0.5942
+    },
+    {
+      "class": "ravioli",
+      "recall": 0.544,
+      "f1": 0.5484
+    },
+    {
+      "class": "pork_chop",
+      "recall": 0.548,
+      "f1": 0.5491
+    },
+    {
+      "class": "scallops",
+      "recall": 0.548,
+      "f1": 0.5918
+    },
+    {
+      "class": "grilled_salmon",
+      "recall": 0.592,
+      "f1": 0.6435
+    },
+    {
+      "class": "beet_salad",
+      "recall": 0.608,
+      "f1": 0.6294
+    }
+  ],
+  "macro_precision": 0.7742,
+  "macro_recall": 0.7726,
+  "macro_f1": 0.7718,
+  "weighted_f1": 0.7718
+}

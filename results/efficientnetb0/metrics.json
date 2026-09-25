@@ -1,0 +1,27 @@
+{
+  "model_name": "EfficientNetB0",
+  "total_parameters": 4184072,
+  "trainable_parameters": 3261825,
+  "training_time_seconds": 13158.63,
+  "inference_latency_ms_per_image": 13.43,
+  "final_val_loss": 1.0809,
+  "final_val_accuracy": 0.7269,
+  "final_test_loss": 0.8091,
+  "final_test_accuracy": 0.7726,
+  "trainable_parameters_phase1": 131941,
+  "phase1_training_time_seconds": 5590.4,
+  "phase2_training_time_seconds": 7568.23,
+  "epochs_phase1": 8,
+  "epochs_phase2": 10,
+  "final_val_top5_accuracy": 0.9068,
+  "final_test_top5_accuracy": 0.9416,
+  "inference_latency_ms_batch1": 342.26,
+  "model_size_mb": 41.47,
+  "peak_gpu_memory_mb": 3288.35,
+  "unfrozen_blocks": [
+    "block6",
+    "block7",
+    "top_conv"
+  ],
+  "batchnorm_frozen_during_finetuning": true
+}
