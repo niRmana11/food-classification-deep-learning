@@ -1,0 +1,11 @@
+<mxfile host="app.diagrams.net" modified="2026-09-26T12:00:00.000Z" agent="SE4050" version="21.0.0" type="device">
+  <diagram id="se4050_mobilenetv2_inverted_residual" name="mobilenetv2_inverted_residual">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="2" value="mobilenetv2_inverted_residual" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#000000;fillColor=#FFFFFF;fontFamily=Times New Roman;fontSize=12;" vertex="1" parent="1"><mxGeometry x="100" y="100" width="300" height="150" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,44 @@
+@startuml end_to_end_pipeline
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName Times New Roman
+skinparam defaultFontSize 11
+skinparam roundcorner 8
+
+title SE4050 Deep Learning End-to-End Experimental Architecture Pipeline
+
+package "Data Ingestion & Zero-Leakage Split" {
+  rectangle "Food-101 Benchmark (ETH Zurich)\n101,000 Total RGB Images (1,000 / Class)" as raw #ffffff
+  rectangle "Stratified Split Hashing (Seed 42)\nTrain: 68,175 (67.5%) | Val: 7,575 (7.5%) | Test: 25,250 (25.0%)" as split #ffffff
+}
+
+package "High-Throughput tf.data Asynchronous Pipeline" {
+  rectangle "Pre-Shuffled Filesystem Manifests (Seed 42)\nPrevents non-i.i.d. shuffle buffer class saturation" as preshuff #ffffff
+  rectangle "tf.data Pipeline\nBilinear Resize: 224x224 | Buffer: 2,048 | Batch: 32 | AUTOTUNE" as tfdata #ffffff
+  rectangle "Training-Only Stochastic Augmentation\nRandomFlip(0.5) + Rotation(+-5%) + Zoom(+-10%)" as aug #ffffff
+}
+
+package "Four Comparative CNN Architectures" {
+  rectangle "Custom CNN (Scratch)\n678K Params | GAP Head | Adam (1e-3)" as m1 #ffffff
+  rectangle "ResNet-50 (ImageNet)\n23.8M Params | Stage 5 Fine-Tuning" as m2 #ffffff
+  rectangle "MobileNetV2 (ImageNet)\n2.39M Params | Inverted Residuals" as m3 #ffffff
+  rectangle "EfficientNetB0 (ImageNet)\n4.18M Params | MBConv + SE Attention" as m4 #ffffff
+}
+
+package "Controlled Evaluation on Quarantined Test Set" {
+  rectangle "Unseen Test Evaluation (25,250 Images)\nTop-1 Acc | Top-5 Acc | Macro F1 | Latency | Generalization Gap" as eval #f9f9f9
+}
+
+raw --> split
+split --> preshuff
+preshuff --> tfdata
+tfdata --> aug : Training Split
+tfdata --> m1 : Baseline
+tfdata --> m2 : Residual
+tfdata --> m3 : Mobile
+tfdata --> m4 : Compound
+m1 --> eval
+m2 --> eval
+m3 --> eval
+m4 --> eval
+@enduml

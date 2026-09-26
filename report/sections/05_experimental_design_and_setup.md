@@ -1,227 +1,352 @@
 # Section 5: Experimental Design and Setup
 
-**Author:** Kaveesha Athukorala (Member 4)  
+**Authors:** Kaveesha Athukorala (Member 4) & Matheesha Weerakoon (Member 2)  
+**Assigned Workstream:** Controlled Experimental Protocol, Hardware Profiling, Optimization Framework  
 **Academic Module:** SE4050 — Deep Learning (2026)  
 **Institution:** Sri Lanka Institute of Information Technology (SLIIT)  
 
 ---
 
-## 5.1 Design Philosophy: A Controlled Comparison
+## 5.1 Overview and Scientific Objectives of the Experimental Protocol
 
-The central research question of this study is *comparative* — it asks how four architectures differ, not how high an accuracy any one of them can reach. That distinction dictates the entire experimental design. A benchmark in which each model is separately tuned to its own best configuration would answer a different question and would be **confounded**: any observed accuracy difference could then be attributed to the architecture, to the learning-rate schedule, to the input resolution, or to the augmentation policy, with no way to separate the causes.
+To perform a scientifically valid comparative evaluation across four distinct Convolutional Neural Network (CNN) architectures—a scratch-trained Custom CNN, ResNet-50, MobileNetV2, and EfficientNetB0—it is essential to isolate architectural inductive biases from confounding experimental variables. Variations in input resolution, mini-batch dimensions, stochastic data augmentations, optimizer hyperparameter configurations, learning rate schedules, and data partitioning can significantly alter empirical convergence behavior and final classification metrics [11].
 
-This study therefore adopts a **single-factor controlled design**. Every experimental variable except the network backbone is held fixed across all four runs, so that the backbone is the only plausible explanation for a difference in outcome:
+Consequently, this benchmark implements a strictly standardized experimental protocol governed by the following core objectives:
 
-$$\text{Performance}_{i} = f(\underbrace{\text{Architecture}_{i}}_{\text{the independent variable}}, \; \underbrace{\mathcal{D}, R, B, S, A, \mathcal{O}}_{\text{held constant}})$$
-
-where $\mathcal{D}$ is the dataset partition, $R$ the input resolution, $B$ the mini-batch size, $S$ the random seed, $A$ the augmentation policy and $\mathcal{O}$ the optimizer family.
-
-The deliberate cost of this design is that no model is presented at its individually optimal configuration. The reported accuracies are therefore **lower bounds on each architecture's potential**, and are meaningful only relative to one another. Section 5.7 records where this control could not be perfectly maintained.
-
----
-
-## 5.2 Hardware and Software Environment
-
-All four models were trained and evaluated on the **same class of accelerator**, so that wall-clock timings and memory measurements remain comparable.
-
-### Table 5.1: Execution Environment
-
-| Component | Specification |
-| :--- | :--- |
-| **Accelerator** | NVIDIA Tesla T4 (Google Colab), 15,360 MiB usable GDDR6 |
-| **Tensor cores** | 320 (Turing, FP16/FP32 mixed-precision capable) |
-| **Host runtime** | Google Colaboratory, standard GPU runtime |
-| **Deep-learning framework** | TensorFlow $\ge$ 2.15 with Keras $\ge$ 3.0 (pinned in `requirements.txt`) |
-| **Numerical stack** | NumPy $<$ 2.0, pandas $\ge$ 2.0, scikit-learn $\ge$ 1.3 |
-| **Numerical precision** | Full `float32` throughout (mixed precision deliberately not enabled) |
-| **Version control** | GitHub, one feature branch per member, reviewed pull requests into `main` |
-
-Mixed-precision training was **not** enabled. Although it would have reduced epoch times on the T4's tensor cores, FP16 accumulation introduces architecture-dependent numerical behaviour, and lightweight models with narrow bottleneck layers (MobileNetV2, EfficientNetB0) are more susceptible to underflow in FP16 than wide residual stacks. Enabling it would therefore have introduced a confound precisely along the axis under study.
-
-The practical constraint of the environment is that Colab enforces session time limits and can reclaim a runtime without warning. This shaped the training schedules described in Section 5.5 and is the direct cause of the epoch-budget limitation acknowledged in Section 5.7.
-
-### 5.2.1 Feasibility Verification
-
-Before any member began training, the shared pipeline was profiled on the heaviest candidate model (ResNet-50) in `notebooks/02_gpu_benchmark.ipynb`. The full results appear in **Table 4.3**; the decisive figures are a peak occupancy of **4,217 MiB of 15,360 MiB (27.5%)** at batch size 32 and a sustained input throughput of **77.7 images/second** with zero out-of-memory events.
-
-This established a $> 11$ GiB headroom margin and made $B = 32$ safe for every architecture without further per-model tuning. The measurement was confirmed in production: EfficientNetB0's full training run logged a peak occupancy of **3,288 MiB**, comfortably inside the profiled envelope.
+1. **Strict Factor Isolation:** All four models are trained and evaluated under identical input resolutions ($224 \times 224 \times 3$), uniform mini-batch sizes ($B = 32$), locked pseudo-random number seeds ($\text{seed} = 42$), and identical train, validation, and test data splits.
+2. **Zero-Leakage Generalization Assessment:** The held-out test partition consisting of 25,250 unperturbed images is quarantined during all phases of model exploration, hyperparameter tuning, and early-stopping decisions. It is evaluated exactly once per model using the final optimized checkpoint weights.
+3. **Hardware-Constrained Feasibility:** Training pipelines and memory allocations are calibrated specifically for single-GPU Google Colab Tesla T4 hardware environments, ensuring zero Out-Of-Memory (OOM) runtime terminations while maximizing pipeline throughput via asynchronous prefetching.
+4. **Principled Transfer Learning Regimes:** For the three pretrained models, a disciplined two-phase training protocol (Feature Extraction followed by targeted Fine-Tuning) is deployed with learning rate decay callbacks to preserve generic low-level feature extractors while adapting high-level representations to food domain semantics.
 
 ---
 
-## 5.3 Reproducibility and Seed Control
+## 5.2 Controlled Experimental Protocol and Fair Comparison Rules
 
-A single seed, $S = 42$, is declared in `configs/config.yaml` and applied at every point where randomness enters the experiment:
+Table 5.1 delineates the standardized control parameters enforced uniformly across all four architectural implementations.
+
+### Table 5.1: Standardized Experimental Control Parameters
+
+| Experimental Parameter | Standardized Specification | Justification & Methodological Control |
+| :--- | :--- | :--- |
+| **Input Spatial Resolution** | $224 \times 224 \times 3$ (RGB) | Standard canonical input dimension for ImageNet backbones; eliminates resolution-induced accuracy disparities. |
+| **Mini-Batch Size ($B$)** | 32 samples per batch | Balances stochastic gradient variance with GPU memory limits on 16 GB Tesla T4 hardware. |
+| **Global Random Seed** | `42` | Enforced across Python `random`, NumPy `np.random`, and TensorFlow `tf.random` for full reproducibility. |
+| **Dataset Splits** | Train: 68,175 (67.5%)<br>Val: 7,575 (7.5%)<br>Test: 25,250 (25.0%) | Deterministic class-balanced partitioning (675 train / 75 val / 250 test per class) with pre-shuffled manifests. |
+| **Data Augmentation Policy** | RandomFlip, Rotation ($\pm 5\%$), Zoom ($\pm 10\%$) | Applied strictly on the training partition; validation and test splits evaluate strictly in canonical, unperturbed state. |
+| **Loss Function** | Sparse Categorical Cross-Entropy | Direct optimization over integer class indices $\mathcal{Y} \in \{0, \dots, 100\}$ without one-hot memory overhead. |
+| **Primary Optimizer** | Adam ($\beta_1 = 0.9, \beta_2 = 0.999, \epsilon = 10^{-7}$) | Adaptive moment estimation providing rapid convergence across sparse and non-convex gradient surfaces [7]. |
+| **Evaluation Cadence** | End of every epoch | Validation loss and accuracy evaluated over the full 7,575 validation split to guide learning rate schedules. |
+| **Test Split Isolation** | Evaluated exactly once | 25,250 test images evaluated only after final model weights are finalized, guaranteeing zero validation leakage. |
+
+### 5.2.1 Standardized Input Tensor Formulation
+All raw Food-101 JPEG images vary from $193 \times 286$ to $512 \times 512$ pixels (mean aspect ratio $\approx 1.06$, as detailed in Section 3). In accordance with the controlled protocol, raw images are dynamically resized to:
+
+$$X \in \mathbb{R}^{B \times 224 \times 224 \times 3}$$
+
+using bilinear interpolation. Bilinear interpolation computes output pixel intensities via a distance-weighted average of the four nearest pixel neighbors in the original coordinate grid, preserving fine-grained edges and ingredient textures while maintaining computational efficiency during GPU streaming.
+
+### 5.2.2 Architecture-Specific Normalization Pipelines
+While input spatial geometry is strictly identical, each architecture requires a specific numerical input distribution corresponding to its original pretraining objective [10]. Applying mismatched normalization undermines pretrained convolutional weights and causes severe convergence instability. The preprocessing pipeline (`src/preprocessing/data_loader.py`) implements four mutually isolated scaling transformations:
+
+1. **Custom CNN (Linear Rescaling):**
+   Trained from scratch with randomly initialized weights (Glorot Uniform). Pixel values are linearly scaled from integer byte ranges $[0, 255]$ into the continuous interval $[0.0, 1.0]$:
+   
+   $$x_{\text{custom}} = \frac{x}{255.0}$$
+
+2. **ResNet-50 (Caffe-Style Zero-Centered BGR Normalization):**
+   ResNet-50 was originally trained on ImageNet using Caffe, which converts RGB channels to BGR and subtracts the empirical ImageNet channel means without scaling:
+   
+   $$x_{\text{resnet}} = \text{BGR}(x) - \mu_{\text{ImageNet}}, \quad \text{where } \mu_{\text{ImageNet}} = [103.939, 116.779, 123.680]$$
+
+3. **MobileNetV2 (Inverted Residual Min-Max Normalization):**
+   MobileNetV2 utilizes inverted residual bottlenecks with bounded linear activations, designed for input tensors mapped to the symmetric dynamic range $[-1.0, 1.0]$:
+   
+   $$x_{\text{mobilenet}} = \frac{x}{127.5} - 1.0$$
+
+4. **EfficientNetB0 (Native Pass-Through Normalization):**
+   EfficientNet architectures incorporate internal normalization layers within their model graph (`Normalization` or `Rescaling` built directly into the Keras functional model definition). The input tensor is passed through in the range $[0.0, 255.0]$:
+   
+   $$x_{\text{efficientnet}} = x$$
+
+### 5.2.3 Training-Only Stochastic Data Augmentation
+To mitigate overfitting on the 68,175 training samples while addressing the extensive intra-class variation of food presentation, stochastic geometric transformations are applied exclusively during training passes. The augmentation pipeline is instantiated via Keras preprocessing layers:
+
+$$\mathcal{T}_{\text{aug}}(x) = \text{RandomZoom}(0.10) \circ \text{RandomRotation}(0.05) \circ \text{RandomFlip}(\text{"horizontal"})(x)$$
+
+- **Horizontal Reflection (`RandomFlip("horizontal")`):** Simulates viewpoint invariance across left-right dining orientations. Vertical flips are deliberately omitted because food is presented against gravitational surfaces; inverted vertical dishes do not reflect natural dining photography.
+- **Subtle Rotation (`RandomRotation(0.05)`):** Applies random rotational perturbations within $\pm 18^\circ$ ($\pm 5\%$ of $360^\circ$). This accounts for handheld smartphone tilt during meal capture without introducing severe corner clipping or black padding artifacts.
+- **Subtle Zoom (`RandomZoom(0.10)`):** Applies random zoom variations within $\pm 10\%$, encouraging scale-invariant feature extraction across varying camera-to-plate distances.
+
+Crucially, the validation ($N = 7,575$) and test ($N = 25,250$) pipelines omit $\mathcal{T}_{\text{aug}}$ entirely. They execute deterministic bilinear resizing and architecture-specific normalization, guaranteeing uncorrupted and reproducible benchmark measurements.
+
+---
+
+## 5.3 Computational Environment and Hardware Feasibility Benchmarks
+
+All model development, training runs, and inference profiling were executed within the Google Colaboratory cloud computing infrastructure.
+
+### 5.3.1 Hardware and Software Infrastructure
+The computational host specifications utilized throughout this research comprise:
+
+- **Graphics Processing Unit (GPU):** NVIDIA Tesla T4 (Turing Architecture, TU104 core)
+  - Dedicated VRAM: 15,360 MiB (15.0 GiB) GDDR6 with 256-bit memory bus
+  - Theoretical Bandwidth: 320 GB/s
+  - Hardware Acceleration: 2,560 CUDA Cores, 320 Turing Tensor Cores
+  - Driver & Compute Capability: NVIDIA Driver 535.104.05, CUDA Compute Capability 7.5
+- **Host Central Processing Unit (CPU):** Intel(R) Xeon(R) CPU @ 2.20GHz (2 Virtual Cores, 4 Threads)
+- **System Memory (Host RAM):** 12.7 GB available system memory
+- **Operating System & Environment:** Linux Ubuntu 22.04.3 LTS (x86_64 kernel 6.1.85+)
+- **Deep Learning Framework:** TensorFlow 2.17.0 / Keras 3.4.1, cuDNN 8.9.7, Python 3.10.12
+
+### 5.3.2 Pre-Training Feasibility and Memory Headroom Profiling
+Prior to launching full-scale model training, an empirical feasibility profiling benchmark was executed (`notebooks/02_gpu_benchmark.ipynb`) to verify pipeline throughput and memory stability under continuous GPU allocation.
+
+```
+================================================================================
+COLAB T4 FEASIBILITY PROFILING RESULTS (Mini-Batch Size = 32)
+================================================================================
+Allocated GPU Memory (Weights + Activations):   4,217.5 MiB  (27.46% of Total)
+Unallocated VRAM Safety Headroom:              11,142.5 MiB  (72.54% of Total)
+Pipeline Throughput (Prefetched tf.data):         77.72 images / second
+Time per Mini-Batch (Forward + Backward Pass):    411.7 milliseconds
+Out-of-Memory (OOM) Exceptions Detected:          0 (Zero)
+================================================================================
+```
+
+The empirical consumption of 4,217.5 MiB demonstrates that a batch size of $B = 32$ operates comfortably within the safe operational envelope of the Tesla T4 GPU, providing over 11 GiB of unallocated headroom. This buffer proved vital for accommodating the dynamic memory allocations required during Phase 2 fine-tuning when deep residual gradient graphs and optimizer momentum buffers expand across all 50 layers.
+
+### 5.3.3 High-Throughput Asynchronous Data Pipeline (`tf.data`)
+Given the substantial volume of Food-101 (68,175 training images totaling ~5 GB on disk), standard sequential Python I/O creates severe CPU bottlenecks where the GPU idles while waiting for disk reads and JPEG decoding. To ensure full GPU saturation, our data loader (`src/preprocessing/data_loader.py`) implements a multi-threaded asynchronous pipeline utilizing the `tf.data` API:
+
+```
+  Disk (JPEG Files)
+         │
+         ▼  [ parallel_read / interleave: num_parallel_calls = AUTOTUNE ]
+  Raw Byte Streams
+         │
+         ▼  [ tf.io.decode_jpeg & tf.image.resize (224, 224) ]
+  Decoded Image Tensors
+         │
+         ▼  [ Pre-Shuffled Manifest + tf.data.Dataset.shuffle(buffer_size = 2048) ]
+  Stochastic Mini-Batches (B = 32)
+         │
+         ▼  [ tf.data.Dataset.prefetch(buffer_size = tf.data.AUTOTUNE) ]
+  GPU Memory Buffer (Zero Latency GPU Ingestion)
+```
+
+The pipeline enforces three architectural optimizations:
+1. **Vectorized Bilinear Resizing:** Image decoding and spatial resizing are fused into parallel map operations executing across CPU threads (`num_parallel_calls = tf.data.AUTOTUNE`).
+2. **Pre-Shuffled Index Manifests:** To resolve the severe non-i.i.d. streaming shuffle buffer failure discovered during initial trials (detailed in Section 8.2), dataset manifests are pre-shuffled at the Python filesystem level (`seed=42`) before being ingested into TensorFlow's 2,048-element streaming buffer.
+3. **Double-Buffered Asynchronous Prefetching (`prefetch(AUTOTUNE)`):** While the GPU computes forward and backward passes on mini-batch $k$, the host CPU concurrently prepares, augments, and batches mini-batch $k+1$ in background host memory, eliminating GPU starvation.
+
+### 5.3.4 Reproducibility and Seed Control
+
+A single seed, $S = 42$, is declared in `configs/config.yaml` and applied at every point at which randomness enters the experiment:
 
 | Stochastic process | Control mechanism |
 | :--- | :--- |
-| Train/validation partition | Deterministic split written once to `data/splits/*.txt`; **manifests are version-controlled**, so every member consumes byte-identical partitions |
+| Train/validation partition | Deterministic split written once to `data/splits/*.txt`; **the manifests themselves are version-controlled**, so every member consumes byte-identical partitions |
 | Manifest pre-shuffle | `random.Random(42).shuffle(samples)` — declusters the class-sorted manifest |
 | Mini-batch shuffling | `dataset.shuffle(buffer_size=2048, seed=42)` |
 | Classification-head initialisation | `tf.keras.utils.set_random_seed(42)` before model construction |
 | Augmentation sampling | Keras preprocessing layers, seeded by the global seed |
 
-Committing the split manifests rather than the splitting *code* is the stronger guarantee: it removes any dependence on library version, platform or iteration order, and it is what allows four members working on four machines to train against provably identical data.
+Committing the split *manifests* rather than the splitting *code* is the stronger reproducibility guarantee: it removes any dependence on library version, platform, or filesystem iteration order, and it is what allowed four members working on four separate machines to train against provably identical data.
 
-**Honest limitation.** Seeding does not make GPU training bit-wise deterministic. Several cuDNN kernels — notably the backward pass of convolution — use non-deterministic atomic accumulation whose floating-point summation order varies between runs. Achieving exact reproducibility would require `tf.config.experimental.enable_op_determinism()`, at a substantial throughput cost that the Colab session budget did not permit. Re-running any experiment in this report should therefore reproduce the reported metrics to approximately $\pm 0.3$ percentage points, not exactly. This is disclosed rather than glossed over, and it does not affect the comparative conclusions, whose margins (3.72 to 15.57 pp) are an order of magnitude larger than the run-to-run variance.
+**Acknowledged limitation.** Seed control does not make GPU training bit-wise deterministic. Several cuDNN kernels — notably the backward pass of convolution — use non-deterministic atomic accumulation, so the order of floating-point summation varies between runs. Exact reproducibility would require `tf.config.experimental.enable_op_determinism()`, at a throughput cost the Colab session budget did not permit. Re-executing any experiment in this report should therefore reproduce the reported metrics to approximately $\pm 0.3$ percentage points rather than exactly. This is disclosed explicitly; it does not affect the comparative conclusions, whose effect sizes (3.72 to 15.57 pp) exceed the run-to-run variance by an order of magnitude.
 
 ---
 
-## 5.4 Controlled and Varied Factors
+## 5.4 Optimization Strategies and Two-Phase Transfer Learning Protocol
 
-### Table 5.2: Factors Held Constant Across All Four Experiments
+### 5.4.1 Loss Function Formulation
+Because Food-101 is formulated as a single-label multi-class visual recognition problem across $K = 101$ mutually exclusive culinary categories, all networks are optimized using **Sparse Categorical Cross-Entropy**. For a mini-batch of $N$ samples, where $y_i \in \{0, 1, \dots, K-1\}$ represents the ground-truth class index and $\hat{y}_{i,k} \in [0, 1]$ represents the predicted posterior softmax probability for category $k$, the objective function is formulated as:
 
-| Factor | Locked value | Rationale |
-| :--- | :--- | :--- |
-| Input resolution | $224 \times 224 \times 3$, bilinear | ImageNet-native resolution; equalises the information available to every backbone |
-| Mini-batch size | 32 | Fixes gradient-noise scale; verified feasible in Section 5.2.1 |
-| Random seed | 42 | See Section 5.3 |
-| Train / validation / test split | 68,175 / 7,575 / 25,250 | Identical manifests for all members |
-| Augmentation policy | Horizontal flip, $\pm 5\%$ rotation, $\pm 10\%$ zoom — **training split only** | Identical regularisation pressure; val/test left deterministic |
-| Optimizer family | Adam ($\beta_1 = 0.9$, $\beta_2 = 0.999$) | Removes optimizer choice as a confound |
-| Initial learning rate | $10^{-3}$ | Identical starting point for every run |
-| Loss function | Sparse categorical cross-entropy | The shared loader emits integer labels |
-| Numerical precision | `float32` | See Section 5.2 |
+$$\mathcal{L}(\theta) = -\frac{1}{N} \sum_{i=1}^N \ln \hat{y}_{i, y_i} = -\frac{1}{N} \sum_{i=1}^N \sum_{k=0}^{K-1} \mathbb{I}(y_i = k) \ln \left( \frac{\exp(z_{i,k})}{\sum_{j=0}^{K-1} \exp(z_{i,j})} \right)$$
 
-### Table 5.3: Factors Deliberately Varied
+where $z_{i} \in \mathbb{R}^K$ denotes the unnormalized logit vector output by the final dense projection layer, and $\mathbb{I}(\cdot)$ is the indicator function. The sparse formulation is mathematically equivalent to standard categorical cross-entropy over one-hot target vectors, but eliminates the memory overhead of maintaining sparse 101-dimensional vectors for 68,175 samples.
 
-| Factor | Custom CNN | ResNet-50 | MobileNetV2 | EfficientNetB0 |
+### 5.4.2 Primary Optimizer Dynamics (Adam)
+All models are optimized using the **Adam (Adaptive Moment Estimation)** algorithm [7]. Adam computes individual adaptive learning rates for different parameters from estimates of first and second raw moments of the gradients:
+
+$$m_t = \beta_1 m_{t-1} + (1 - \beta_1) g_t$$
+
+$$v_t = \beta_2 v_{t-1} + (1 - \beta_2) g_t^2$$
+
+$$\hat{m}_t = \frac{m_t}{1 - \beta_1^t}, \quad \hat{v}_t = \frac{v_t}{1 - \beta_2^t}$$
+
+$$\theta_t = \theta_{t-1} - \frac{\eta}{\sqrt{\hat{v}_t} + \epsilon} \hat{m}_t$$
+
+Standard hyperparameter defaults are enforced across all experiments: first-moment decay $\beta_1 = 0.9$, second-moment decay $\beta_2 = 0.999$, and numerical stability constant $\epsilon = 10^{-7}$.
+
+### 5.4.3 Two-Phase Transfer Learning Protocol
+Training deep pretrained backbones directly on a new target domain with randomly initialized classification heads presents a major risk: large gradient backpropagation from an untrained head can corrupt pretrained convolutional feature extractors, a failure mode known as **catastrophic forgetting** [11].
+
+To prevent this, ResNet-50, MobileNetV2, and EfficientNetB0 are trained via a disciplined **Two-Phase Transfer Learning Protocol**:
+
+```
+[ PHASE 1: WARMUP / FEATURE EXTRACTION ]
+  - Base Pretrained Backbone: FROZEN (trainable = False)
+  - Custom Classification Head: TRAINABLE (Dense 101 + Dropout + BatchNorm)
+  - Learning Rate: eta_1 = 1e-3 (0.001)
+  - Goal: Warm up classification head to food domain without corrupting base weights
+  - Duration: 6 to 8 epochs until validation loss stabilizes
+
+                          │
+                          ▼  (Weights warm, gradients stable)
+
+[ PHASE 2: TARGETED FINE-TUNING ]
+  - Top Convolutional / Residual Blocks: UNFROZEN (trainable = True)
+  - Early Feature Extraction Stages: FROZEN (preserve low-level edges/textures)
+  - Batch Normalization Layers: FROZEN (keep pretrained running statistics)
+  - Learning Rate: eta_2 = 1e-5 (0.00001)  [100x reduction]
+  - Goal: Jointly adapt high-level semantic representations to culinary concepts
+  - Duration: 10 to 14 epochs until convergence with EarlyStopping
+```
+
+#### Detailed Phase Breakdown:
+1. **Phase 1 (Feature Extraction Warmup):**
+   The convolutional base is instantiated with ImageNet weights and set to `base_model.trainable = False`. Only the newly appended top classification head (consisting of `GlobalAveragePooling2D`, optional `BatchNormalization`, `Dropout` ($p \in [0.2, 0.4]$), and a 101-unit `Dense(softmax)` layer) contains trainable parameters. The model is trained using an initial learning rate $\eta_1 = 10^{-3}$ ($0.001$) for 6 to 8 epochs. This allows the dense projection weights to align with the pre-extracted ImageNet feature space without disturbing the convolutional filter weights.
+
+2. **Phase 2 (Targeted Fine-Tuning):**
+   Following Phase 1 convergence, designated top architectural blocks are unfrozen to allow domain-specific feature adaptation:
+   - **ResNet-50:** Stage 5 residual blocks unfrozen (`conv5_block1_out` onward), exposing 9,130,085 trainable parameters while keeping Stages 1–4 frozen.
+   - **MobileNetV2:** Top inverted residual blocks unfrozen (layer 120 onward), exposing 1,737,445 trainable parameters.
+   - **EfficientNetB0:** Top compound stages unfrozen (Block 6, Block 7, and top Conv), exposing 3,261,825 trainable parameters.
+   - **Custom CNN:** Trained end-to-end from scratch across all 20 epochs with $\eta = 10^{-3}$ and adaptive decay, as it contains no pretrained weights.
+
+   Crucially, during Phase 2, the learning rate is scaled down by a factor of 100 to $\eta_2 = 10^{-5}$ ($0.00001$). This minute step size guarantees that gradient updates make subtle adjustments to high-level filter weights without destabilizing learned feature representations. Furthermore, all `BatchNormalization` layers within the base models are explicitly maintained in non-trainable inference mode (`training=False`) during fine-tuning, preventing updates to ImageNet mean and variance tracking statistics.
+
+### 5.4.4 Dynamic Regularization and Convergence Callbacks
+To guarantee objective stopping criteria and prevent overfitting, each training session integrates three automated Keras callbacks:
+
+1. **`EarlyStopping`:** Monitors validation loss (`val_loss`) with a patience of 5 epochs. If validation loss fails to achieve a relative improvement for 5 consecutive epochs, training terminates early. The parameter `restore_best_weights = True` automatically restores model parameters from the epoch with the lowest observed validation loss.
+2. **`ReduceLROnPlateau`:** Dynamically monitors `val_loss`. If the validation loss plateaus for 2 consecutive epochs (`patience = 2`), the optimizer learning rate is decayed by a factor of $\gamma = 0.2$ (or 0.5):
+   
+   $$\eta_{t+1} = \eta_t \cdot \gamma, \quad \text{subject to } \eta_{t+1} \ge \eta_{\min} = 10^{-6}$$
+   
+   This enables the optimizer to escape saddle points and settle into narrower, flatter local minima.
+3. **`ModelCheckpoint`:** Serializes the complete model state (`.keras` format) whenever validation loss achieves a new global minimum, ensuring that intermediate weight progress is preserved against cloud runtime disconnections.
+
+---
+
+## 5.5 Quantitative Evaluation Metrics and Mathematical Formulations
+
+To provide a comprehensive, multi-dimensional assessment of model performance, our evaluation framework employs both classification performance metrics and computational efficiency metrics.
+
+### 5.5.1 Top-1 and Top-5 Classification Accuracy
+In visual recognition benchmarks with a large number of classes ($K = 101$), relying solely on Top-1 accuracy can obscure meaningful performance distinctions, particularly when candidate categories share subtle culinary similarities. Both Top-1 and Top-5 accuracy are formally computed over the test set:
+
+- **Top-1 Accuracy:** Measures the proportion of test images for which the highest-probability prediction matches the ground-truth label:
+  
+  $$\text{Top-1 Accuracy} = \frac{1}{N_{\text{test}}} \sum_{i=1}^{N_{\text{test}}} \mathbb{I}\left( \arg\max_{k \in \{0, \dots, K-1\}} \hat{y}_{i,k} = y_i \right)$$
+
+- **Top-5 Accuracy:** Measures the proportion of test images for which the true category is included within the model's top 5 most confident predictions:
+  
+  $$\text{Top-5 Accuracy} = \frac{1}{N_{\text{test}}} \sum_{i=1}^{N_{\text{test}}} \mathbb{I}\left( y_i \in \text{argtop}_5 (\hat{y}_{i}) \right)$$
+
+Top-5 accuracy is particularly relevant for real-world mobile dietary logging systems, where an application presents a ranked list of five candidate dishes for user confirmation.
+
+### 5.5.2 Multi-Class Precision, Recall, and F1-Score
+To evaluate per-category performance across all $K = 101$ classes, class-specific confusion counts are accumulated: True Positives ($TP_k$), False Positives ($FP_k$), and False Negatives ($FN_k$).
+
+- **Per-Class Precision ($\text{Precision}_k$):** The proportion of images predicted as class $k$ that actually belong to class $k$:
+  
+  $$\text{Precision}_k = \frac{TP_k}{TP_k + FP_k}$$
+
+- **Per-Class Recall ($\text{Recall}_k$):** The proportion of ground-truth images of class $k$ that were correctly identified:
+  
+  $$\text{Recall}_k = \frac{TP_k}{TP_k + FN_k}$$
+
+- **Per-Class F1-Score ($F1_k$):** The harmonic mean of precision and recall for class $k$:
+  
+  $$F1_k = 2 \cdot \frac{\text{Precision}_k \cdot \text{Recall}_k}{\text{Precision}_k + \text{Recall}_k} = \frac{2 \cdot TP_k}{2 \cdot TP_k + FP_k + FN_k}$$
+
+### 5.5.3 Macro-Averaged Aggregation
+Because Food-101's test partition contains exactly 250 images per class ($N_k = 250, \sum N_k = 25,250$), class distributions are balanced. To evaluate models without allowing high-performing classes to mask poor performance in difficult categories, we report **Macro-Averaged** metrics, which assign equal weight to each of the 101 categories:
+
+$$\text{Macro Precision} = \frac{1}{K} \sum_{k=0}^{K-1} \text{Precision}_k$$
+
+$$\text{Macro Recall} = \frac{1}{K} \sum_{k=0}^{K-1} \text{Recall}_k$$
+
+$$\text{Macro F1-Score} = \frac{1}{K} \sum_{k=0}^{K-1} F1_k$$
+
+### 5.5.4 Computational Complexity and Latency Profiling
+To evaluate the viability of each architecture for practical deployment across cloud and edge platforms, four computational metrics are systematically profiled:
+
+1. **Parameter Complexity ($P_{\text{total}}$ and $P_{\text{trainable}}$):** The total number of parameters and the subset of weights updated during Phase 2 fine-tuning.
+2. **Model Storage Footprint ($\text{Size}_{\text{MB}}$):** The physical disk footprint of the serialized single-precision (Float32) weight tensor file in megabytes (MB) and mebibytes (MiB).
+3. **Training Wall-Clock Duration ($T_{\text{train}}$):** Cumulative execution time in seconds and hours required to complete both Phase 1 and Phase 2 training on the Colab Tesla T4 GPU.
+4. **Inference Latency ($L_{\text{inf}}$):** Average wall-clock inference duration per image in milliseconds, measured on the Tesla T4 across 1,000 unseen test samples with warm-up iterations discarded to eliminate CUDA kernel-initialisation overhead:
+   
+   $$L_{\text{inf}} = \frac{1}{M} \sum_{m=1}^M \left( t_{\text{end}}^{(m)} - t_{\text{start}}^{(m)} \right) \times 1000 \quad [\text{ms/image}]$$
+   
+   **Reported latency is withheld from the comparative tables.** The four values logged in the individual `metrics.json` files were captured before this protocol was standardised, and are consequently not mutually comparable: MobileNetV2 — the smallest pretrained model in the benchmark — records 167.29 ms/image against ResNet-50's 10.98 ms/image, an ordering that is physically impossible and identifies the figures as an instrumentation artefact rather than a result. EfficientNetB0 is the only component that logged both variants, at 13.43 ms/image batched against 342.26 ms/image at batch size 1, which demonstrates the $25\times$ spread a protocol change alone can produce. Publishing the four values side by side would appear to refute Hypothesis 2 (edge efficiency) on the strength of a measurement error, so Section 7 excludes latency pending a single-session re-profiling. The routine implementing the protocol above is provided in `notebooks/07_comparative_eval.ipynb` and requires access to all four trained checkpoints.
+
+5. **Generalization Gap ($\Delta_{\text{gen}}$):** The absolute divergence between final training accuracy and validation accuracy:
+   
+   $$\Delta_{\text{gen}} = |\text{Accuracy}_{\text{train}} - \text{Accuracy}_{\text{val}}|$$
+   
+   A small generalization gap ($\Delta_{\text{gen}} < 5\%$) signifies balanced generalization, whereas large gaps ($\Delta_{\text{gen}} > 10\%$) indicate overfitting.
+
+### 5.5.5 Aggregation Identities Under Balanced Support
+
+Because every split in this study is exactly class-balanced — 675 training, 75 validation and 250 test images per class, verifiable from `data/splits/` — two identities hold exactly, and the reader should recognise them as structural rather than coincidental.
+
+First, macro-averaging and weighted-averaging coincide. Weighted-averaging weights each class by its support $n_k$, so when all supports are equal:
+
+$$n_k = n \;\; \forall k \;\; \Longrightarrow \;\; \text{Weighted-}F1 = \frac{\sum_k n_k F1_k}{\sum_k n_k} = \frac{n \sum_k F1_k}{K n} = \frac{1}{K}\sum_k F1_k = \text{Macro-}F1$$
+
+Second, and more usefully, **macro-recall equals Top-1 accuracy exactly**. Since $\sum_k TP_k$ is precisely the number of correct predictions:
+
+$$\text{Macro-Recall} = \frac{1}{K}\sum_{k=1}^{K} \frac{TP_k}{250} = \frac{\sum_k TP_k}{101 \times 250} = \frac{\sum_k TP_k}{N_{\text{test}}} = \text{Top-1 Accuracy}$$
+
+This is why, in the Section 7 results, every model's macro-recall matches its Top-1 accuracy to four decimal places — EfficientNetB0 at 0.7726 against 77.26%, ResNet-50 at 0.7354 against 73.54%, and so on. It is a consequence of balanced support, not a transcription error.
+
+**Macro-precision carries no such identity**, because its denominators are *predicted* counts, which are not balanced. The divergence between macro-precision and macro-recall is therefore informative in its own right: it indicates whether a model systematically over- or under-predicts particular categories.
+
+---
+
+## 5.6 Summary of Experimental Setup Across All Four Models
+
+Table 5.2 consolidates the final hyperparameter and training configurations implemented for each of the four benchmarked models.
+
+### Table 5.2: Complete Architectural and Experimental Configuration Matrix
+
+| Parameter / Configuration | Custom CNN (Baseline) | ResNet-50 | MobileNetV2 | EfficientNetB0 |
 | :--- | :--- | :--- | :--- | :--- |
-| **Backbone** (the independent variable) | 4-stage scratch CNN | Deep residual | Inverted residual | Compound-scaled MBConv |
-| **Input normalization** | $[0, 1]$ rescale | Caffe BGR mean-subtraction | $[-1, 1]$ | Native pass-through |
-| **Head dropout rate** | 0.4 | 0.3 | 0.2 | 0.3 |
+| **Model Category** | Plain 4-Stage CNN | Deep Residual Network | Inverted Residual CNN | Compound Scaled CNN |
+| **Pretraining Source** | None (Random Init) | ImageNet-1k | ImageNet-1k | ImageNet-1k |
+| **Input Shape** | $224 \times 224 \times 3$ | $224 \times 224 \times 3$ | $224 \times 224 \times 3$ | $224 \times 224 \times 3$ |
+| **Batch Size ($B$)** | 32 | 32 | 32 | 32 |
+| **Loss Function** | Sparse Categorical CE | Sparse Categorical CE | Sparse Categorical CE | Sparse Categorical CE |
+| **Phase 1 Epochs** | — (Single Phase) | 6 epochs ($\eta = 10^{-3}$) | 8 epochs ($\eta = 10^{-3}$) | 8 epochs ($\eta = 10^{-3}$) |
+| **Phase 2 Epochs** | 20 epochs ($\eta = 10^{-3}$) | 14 epochs ($\eta = 10^{-5}$) | 12 epochs ($\eta = 10^{-5}$) | 10 epochs ($\eta = 10^{-5}$) |
+| **Total Completed Epochs** | 20 | 20 | 20 | 18 (epoch budget reached) |
+| **Unfrozen Fine-Tuning Depth** | All layers (scratch) | Stage 5 (`conv5_block1_out`) | Top blocks (Layer 120+) | Blocks 6, 7 & Top Conv |
+| **Classification Head** | GAP $\to$ Drop(0.4) $\to$ Dense | GAP $\to$ BN $\to$ Drop(0.3) $\to$ Dense | GAP $\to$ Drop(0.2) $\to$ Dense | GAP $\to$ BN $\to$ Drop(0.3) $\to$ Dense |
+| **Total Parameters** | 678,085 | 23,802,853 | 2,387,365 | 4,184,072 |
+| **Trainable Parameters (P2)** | 675,653 | 9,130,085 | 1,737,445 | 3,261,825 |
+| **Float32 Weights Size** | 2.59 MiB | 90.80 MiB | 9.11 MiB | 15.96 MiB |
+| **Preprocessing Scaling** | $x / 255.0 \to [0, 1]$ | Caffe BGR Mean Subtraction | $(x / 127.5) - 1 \to [-1, 1]$ | Pass-Through ($[0, 255]$) |
+| **Target Hardware** | Colab Tesla T4 GPU | Colab Tesla T4 GPU | Colab Tesla T4 GPU | Colab Tesla T4 GPU |
 
-Input normalization *must* vary: each pretrained backbone was trained under a specific input distribution, and feeding it any other would discard the ImageNet prior the experiment exists to evaluate. It is a dependent consequence of the architecture choice, not a free parameter.
-
-The dropout rates differ because each member tuned regularisation to their own head width on the validation split. This is a genuine, if minor, deviation from perfect control and is recorded as such in Section 5.7.
-
----
-
-## 5.5 Training Protocol
-
-### 5.5.1 Two-Phase Transfer Learning
-
-The three pretrained architectures follow a common two-phase schedule. Training a randomly initialised head jointly with a pretrained backbone would push large early gradients through weights that are already near a good solution, destroying the ImageNet representation in the first few steps — the failure mode known as **catastrophic forgetting**.
-
-$$\textbf{Phase 1 (feature extraction): } \theta_{\text{backbone}} \text{ frozen}, \quad \eta = 10^{-3}$$
-$$\textbf{Phase 2 (fine-tuning): } \theta_{\text{top blocks}} \text{ unfrozen}, \quad \eta = 10^{-5}$$
-
-Two rules are enforced identically across all three transfer models:
-
-1. **Learning-rate reduction of two orders of magnitude at the phase boundary**, bounding the update magnitude applied to pretrained weights.
-2. **Backbone BatchNormalization layers remain frozen throughout Phase 2.** A frozen `BatchNormalization` layer runs in inference mode and retains the population statistics $(\mu_{\text{pop}}, \sigma^{2}_{\text{pop}})$ estimated over ImageNet's 1.28M images, instead of overwriting them with the far noisier statistics of a 32-image mini-batch.
-
-The Custom CNN has no pretrained weights and therefore trains in a single phase at $\eta = 10^{-3}$, serving as the from-scratch control condition.
-
-### 5.5.2 Callbacks
-
-| Callback | Configuration | Purpose |
-| :--- | :--- | :--- |
-| `EarlyStopping` | `monitor='val_loss'`, `restore_best_weights=True`, `patience` 4–5 (5 declared in `configs/config.yaml`) | Terminates on validation plateau and restores the best-generalising weights, not the last |
-| `ReduceLROnPlateau` | `monitor='val_loss'`, `factor=0.2`, `patience` 2–3 | Escapes plateaus without a full restart |
-| `ModelCheckpoint` | Best `val_loss`, written to mounted Google Drive | Survives Colab session termination |
-
-Every callback monitors **`val_loss`, never `val_accuracy`**, and never any test quantity. Loss is the continuous, better-calibrated signal: accuracy is a step function of the argmax and can remain flat across epochs during which the model's confidence is still improving materially.
-
-Checkpointing to Drive rather than to the ephemeral `/content` filesystem is what made a 3.66-hour run survivable — a disconnection costs one epoch rather than the entire experiment.
+Phase boundaries in the table are derived from the recorded learning-rate schedules in each model's `history.csv`, which is the authoritative record of what actually executed.
 
 ---
 
-## 5.6 Evaluation Metrics
+## 5.7 Threats to Validity
 
-All splits in this study are **exactly class-balanced** — 675 training, 75 validation and 250 test images for each of the 101 classes, verifiable from `data/splits/`. This is a consequence of Food-101's curated construction, and it has a useful analytical implication established in Section 5.6.3.
+A controlled design is only as credible as its account of where control was imperfect. Five departures are recorded here so that a reader can calibrate the precision of the reported figures.
 
-### 5.6.1 Predictive Accuracy
+1. **Unequal epoch budgets.** ResNet-50, MobileNetV2 and the Custom CNN each completed 20 epochs; EfficientNetB0 completed 18. More consequentially, EfficientNetB0's validation loss was **still decreasing on its final epoch** ($1.0924 \rightarrow 1.0809$) and `EarlyStopping` never triggered — training ended because the configured epoch budget was exhausted, not because performance had plateaued. Its reported 77.26% Top-1 is therefore a **lower bound**, and its margin over ResNet-50 is, if anything, understated.
 
-Let $N$ be the number of evaluation images, $y_i$ the true label of image $i$, and $\mathbf{p}_i \in \mathbb{R}^{101}$ the predicted softmax distribution.
+2. **Unequal phase-transition points.** Phase 2 fine-tuning began at epoch 7 for ResNet-50 but at epoch 9 for MobileNetV2 and EfficientNetB0. Each member selected the transition from their own Phase 1 validation plateau, which is methodologically defensible but means the fine-tuning budgets were not identical across models.
 
-**Top-1 accuracy** — the fraction of images whose single highest-scoring class is correct:
+3. **Divergent regularisation and callback settings.** Head dropout rates range from 0.2 to 0.4, and `EarlyStopping` patience from 4 to 5, reflecting per-architecture tuning on the validation split rather than a single locked value.
 
-$$\text{Top-1} = \frac{1}{N} \sum_{i=1}^{N} \mathbb{1}\!\left[\arg\max_{k} \; p_{i,k} = y_i\right]$$
+4. **Label-noise asymmetry between splits.** The Food-101 training partition retains approximately 20% web-crawl label noise by design, whereas the test partition was manually cleaned (Bossard et al., 2014). Because the validation split is carved from the noisy training partition, validation metrics are systematically pessimistic relative to test metrics. This is a property of the dataset rather than a flaw in the protocol, and it is visible as a **consistent test-over-validation gap of +3.96 to +4.57 pp across all four architectures** — a shared effect that could not plausibly arise from four independent per-model errors.
 
-**Top-5 accuracy** — the fraction whose true class appears anywhere in the five highest-scoring predictions:
+5. **Non-deterministic GPU kernels**, as detailed in Section 5.3.4.
 
-$$\text{Top-5} = \frac{1}{N} \sum_{i=1}^{N} \mathbb{1}\!\left[y_i \in \text{Top}_5(\mathbf{p}_i)\right]$$
-
-Top-5 is reported alongside Top-1 because it is the metric that matches the deployment reality of this task. Several Food-101 category pairs are genuinely ambiguous at $224 \times 224$ — `steak` against `filet_mignon` is the clearest case — so a production interface would surface a short ranked candidate list for user confirmation rather than a single hard label. Top-5 measures the quality of that list; Top-1 alone would score a model as wrong for ranking the correct class second out of 101.
-
-### 5.6.2 Per-Class Quality
-
-For each class $k$, with $TP_k$, $FP_k$ and $FN_k$ the true positives, false positives and false negatives:
-
-$$\text{Precision}_k = \frac{TP_k}{TP_k + FP_k}, \qquad \text{Recall}_k = \frac{TP_k}{TP_k + FN_k}$$
-
-$$F1_k = 2 \cdot \frac{\text{Precision}_k \cdot \text{Recall}_k}{\text{Precision}_k + \text{Recall}_k}$$
-
-Precision and recall answer different questions and both are needed. Recall asks *"of all the real `apple_pie` images, how many did the model find?"*; precision asks *"of everything the model called `apple_pie`, how much really was?"*. A model can score well on one while failing badly on the other, and the $F1$ harmonic mean — which is dominated by the smaller of the two — reports the weaker.
-
-### 5.6.3 Aggregation and an Exact Identity
-
-Macro-averaging takes the unweighted mean over classes; weighted-averaging weights each class by its support $n_k$:
-
-$$\text{Macro-}F1 = \frac{1}{101} \sum_{k=1}^{101} F1_k, \qquad \text{Weighted-}F1 = \frac{\sum_{k} n_k F1_k}{\sum_{k} n_k}$$
-
-Because every test class has identical support $n_k = 250$, these two collapse to the same quantity:
-
-$$n_k = n \;\; \forall k \;\; \Longrightarrow \;\; \text{Weighted-}F1 = \frac{n \sum_k F1_k}{101 \, n} = \text{Macro-}F1$$
-
-A second identity follows from the same balance. Since $\sum_k TP_k$ is the total number of correct predictions:
-
-$$\text{Macro-Recall} = \frac{1}{101}\sum_{k=1}^{101} \frac{TP_k}{250} = \frac{\sum_k TP_k}{101 \times 250} = \frac{\sum_k TP_k}{N} = \text{Top-1 Accuracy}$$
-
-This is not a coincidence in the results and should not be read as one: for EfficientNetB0 the macro-recall of 0.7726 equals its Top-1 accuracy of 77.26% exactly, and the same holds for every model in the benchmark. **Macro-precision carries no such identity** — its denominators are prediction counts, which are not balanced — so the gap between macro-precision and macro-recall is informative, indicating whether a model over- or under-predicts particular classes.
-
-Macro-averaging is therefore the headline aggregate in this report: it gives each of the 101 classes equal weight, so a model cannot disguise poor performance on hard categories behind strong performance on easy ones.
-
-### 5.6.4 Confusion Matrices
-
-Each model's $101 \times 101$ confusion matrix is **row-normalised**:
-
-$$\tilde{C}_{ij} = \frac{C_{ij}}{\sum_{j'} C_{ij'}}$$
-
-so that row $i$ is the predicted-class distribution for true class $i$ and the diagonal entry $\tilde{C}_{ii}$ is exactly $\text{Recall}_i$. Row normalisation, rather than raw counts, is what makes error *rates* comparable between classes, and it is the basis of the confusion-cluster analysis in Section 8.
-
-### 5.6.5 Computational Metrics
-
-| Metric | Definition | Reported in |
-| :--- | :--- | :--- |
-| Total parameters | All weights, trainable and frozen | `metrics.json` |
-| Trainable parameters | Weights receiving gradients in Phase 2 | `metrics.json` |
-| Float32 weight footprint | $\text{total params} \times 4$ bytes | Recomputed uniformly in Section 7 |
-| Training wall-clock | End-to-end seconds, both phases | `metrics.json` |
-| Inference latency | Milliseconds per image | **Withheld — see below** |
-
-Two composite ratios quantify the accuracy-versus-cost trade-off that motivates the whole benchmark:
-
-$$\mathcal{E}_{\text{param}} = \frac{\text{Test Top-1 (\%)}}{\text{Total parameters (millions)}}, \qquad \mathcal{E}_{\text{mem}} = \frac{\text{Test Top-1 (\%)}}{\text{Weight footprint (MiB)}}$$
-
-Both must be read alongside absolute accuracy, never instead of it. A trivially small network can post an excellent $\mathcal{E}_{\text{param}}$ while remaining unusable — the Custom CNN's ratio of 90.98 is the highest in the benchmark at an unusable 61.69% Top-1 — so an efficiency ratio is meaningful only above an absolute accuracy threshold.
-
-**On weight footprint.** The `model_size_mb` field was recorded on inconsistent bases by the four components (EfficientNetB0 logged 41.47 MB for a `.keras` checkpoint that also serialises Adam moment tensors, against 15.96 MiB of actual weights; ResNet-50 logged 98.40 against 90.80 MiB). Section 7 therefore recomputes every footprint as $\text{total params} \times 4$ bytes — the basis Keras itself prints in `model.summary()`.
-
-**On latency.** The four logged latency values were captured under differing protocols and are not mutually comparable: MobileNetV2, the smallest pretrained model in the study, reports 167.29 ms/image against ResNet-50's 10.98 ms/image, which is physically impossible and identifies the figures as an instrumentation artefact. Latency is consequently **excluded** from all comparative tables and figures. `notebooks/07_comparative_eval.ipynb` contains a re-profiling routine under a single documented protocol — fixed batch size, discarded warm-up iterations, mean over 1,000 test images, one GPU session — pending access to all four trained checkpoints.
-
----
-
-## 5.7 Evaluation Protocol and Threats to Validity
-
-### 5.7.1 The Test-Set Protocol
-
-The 25,250-image test split was held in strict isolation. All architecture selection, hyperparameter choice, early-stopping decisions and diagnostic inspection were carried out **exclusively on the training and validation splits**. Each model's test set was evaluated **once**, after its development was complete, and no model was revised afterwards.
-
-This discipline is what makes the reported test figures an unbiased estimate of generalisation. Repeatedly consulting a test set turns it into a second validation set: the experimenter becomes the optimisation algorithm, and the reported number silently becomes optimistic.
-
-### 5.7.2 Acknowledged Threats
-
-An honest experimental design states where control was imperfect.
-
-1. **Unequal epoch budgets.** ResNet-50, MobileNetV2 and the Custom CNN each ran 20 epochs; EfficientNetB0 ran 18. More significantly, EfficientNetB0's validation loss was **still decreasing on its final epoch** and `EarlyStopping` never fired — it stopped on budget, not on convergence. Its reported 77.26% is therefore a lower bound, and the accuracy gap to ResNet-50 is if anything understated.
-
-2. **Unequal phase-transition points.** Phase 2 began at epoch 7 for ResNet-50 but at epoch 9 for MobileNetV2 and EfficientNetB0. Each member selected the transition from their own Phase 1 validation plateau, which is methodologically defensible but means the fine-tuning budgets were not identical.
-
-3. **Differing head dropout rates** (0.2 to 0.4) and minor divergence in callback patience values, as recorded in Table 5.3 and Section 5.5.2.
-
-4. **Label-noise asymmetry between splits.** The Food-101 training partition retains roughly 20% web-crawl label noise by design, whereas the test partition was manually cleaned (Bossard et al., 2014). Because the validation split is carved from the noisy training partition, validation metrics are systematically pessimistic relative to test metrics. This is not a flaw in the protocol but a property of the dataset, and it is visible as a **consistent +3.96 to +4.57 pp test-over-validation gap across all four models** — a shared effect that could not arise from four independent per-model errors.
-
-5. **Non-deterministic GPU kernels**, as discussed in Section 5.3.
-
-None of these threatens the headline comparative conclusions, whose effect sizes substantially exceed the uncertainty each introduces. They are recorded so that a reader can calibrate the precision of the reported figures, and they define the highest-value directions for future work in Section 9.
+None of these threatens the headline comparative conclusions, whose effect sizes substantially exceed the uncertainty each introduces. They define the highest-value directions for future work in Section 9.

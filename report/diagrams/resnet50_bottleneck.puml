@@ -1,0 +1,28 @@
+@startuml resnet50_bottleneck
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName Times New Roman
+skinparam defaultFontSize 11
+skinparam roundcorner 8
+
+title ResNet-50 3-Layer Bottleneck Residual Block with Identity Shortcut
+
+rectangle "Input Feature Map x\n(e.g., 56 x 56 x 256)" as in #f9f9f9
+
+package "Residual Branch F(x, {W_i})" {
+  rectangle "1 x 1 Conv (Compression)\n64 filters, stride 1\nBatchNorm + ReLU" as c1 #ffffff
+  rectangle "3 x 3 Conv (Spatial Feature Extraction)\n64 filters, stride 1 or 2\nBatchNorm + ReLU" as c2 #ffffff
+  rectangle "1 x 1 Conv (Restoration)\n256 filters, stride 1\nBatchNorm" as c3 #ffffff
+}
+
+circle "(+) Addition" as add #ffffff
+rectangle "Output ReLU\nH(x) = F(x) + x" as out #f9f9f9
+
+in --> c1 : Channel Reduction (4x)
+c1 --> c2 : Spatial Convolutions
+c2 --> c3 : Channel Restoration
+
+in --> add : Identity Shortcut (Stride 1)\nor 1x1 Conv Projection (Stride 2)
+c3 --> add : F(x)
+add --> out : H(x)
+@enduml
