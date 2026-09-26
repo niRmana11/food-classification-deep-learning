@@ -10,64 +10,68 @@
 
 ## 1. Multi-Screen Visual Navigation & Timing Map
 
-This timeline outlines how to seamlessly demonstrate your slides, actual codebase, Google Colab training logs, and test results within your allotted 2 minutes and 30 seconds:
+This timeline outlines how to point directly to visual elements on screen (diagrams, code lines, training cells, and test curves) within your 2 minutes and 30 seconds:
 
-| Scene & Time | Primary Screen View | Secondary / Live Demo View | Spoken Objective |
+| Scene & Time | Primary Screen View | Live Visual Interaction / Cursor Cues | Spoken Objective |
 | :--- | :--- | :--- | :--- |
-| **Scene 8**<br>`05:15 – 06:00`<br>*(45 sec)* | **Slide 8:** Inverted Residuals & Linear Bottlenecks Diagram | *Quick glance at report:* Section 6.3 / Figure 6.7 | Acknowledge Matheesha; explain inverted residual flow ($t=6$) and why linear bottlenecks preserve low-dimensional manifold information. |
-| **Scene 9**<br>`06:00 – 06:45`<br>*(45 sec)* | **VS Code / GitHub Repo:** [`src/models/mobilenetv2.py`](file:///d:/Group%20Projects/food-classification-deep-learning/src/models/mobilenetv2.py) | **Slide 9:** Depthwise Separable Factorization & Math | Walk through modular Python code; show Depthwise + Pointwise layers; derive the 88%–89% FLOP reduction ($\frac{1}{N} + \frac{1}{D_k^2}$). |
-| **Scene 10**<br>`06:45 – 07:45`<br>*(60 sec)* | **Google Colab Notebook:** [`notebooks/05_mobilenetv2.ipynb`](file:///d:/Group%20Projects/food-classification-deep-learning/notebooks/05_mobilenetv2.ipynb) | **Slide 10 / Report:** [`results/mobilenetv2/training_curves.png`](file:///d:/Group%20Projects/food-classification-deep-learning/results/mobilenetv2/training_curves.png) & metrics | Demonstrate Phase 1/2 training cells, frozen BatchNorm, final test evaluation on 25,250 images, highlight 9.11 MB edge footprint, and hand over to Kaveesha. |
+| **Scene 8**<br>`05:15 – 06:00`<br>*(45 sec)* | **Slide 8 / Report Figure 6.7:**<br>Inverted Residual Block Topology | • Point cursor to **$1\times 1$ Expand ($t=6$)**.<br>• Move cursor to **$3\times 3$ Depthwise Conv**.<br>• Circle **$1\times 1$ Linear Pointwise** (NO ReLU).<br>• Trace the **top residual shortcut line** connecting the narrow ends. | Acknowledge Matheesha; explain inverted residual dataflow ($t=6$) and prove why linear bottlenecks preserve low-dimensional manifold information. |
+| **Scene 9**<br>`06:00 – 06:45`<br>*(45 sec)* | **VS Code:** [`src/models/mobilenetv2.py`](file:///d:/Group%20Projects/food-classification-deep-learning/src/models/mobilenetv2.py)<br>(or **Slide 9**) | • Highlight lines 8–15 in docstring and lines 70–82.<br>• Point cursor to the FLOP formula $\frac{1}{N} + \frac{1}{D_k^2}$ on Slide 9.<br>• Point to total parameter count: **2.39M**. | Walk through modular Python code; show Depthwise + Pointwise layers; derive the 88%–89% FLOP reduction ($\frac{1}{9} \approx 11.1\%$). |
+| **Scene 10**<br>`06:45 – 07:45`<br>*(60 sec)* | **Google Colab Notebook:** [`notebooks/05_mobilenetv2.ipynb`](file:///d:/Group%20Projects/food-classification-deep-learning/notebooks/05_mobilenetv2.ipynb)<br>+ **Slide 10 / Figure 6.8** | • Point to Phase 1 head training (Epochs 1–8: 57.03%).<br>• Point to Phase 2 dashed line at Epoch 8 (unfreeze layer 120+, $\eta = 10^{-5}$, frozen BN).<br>• Highlight final test evaluation box: **68.69% Top-1**, **90.15% Top-5**, **9.11 MB size**.<br>• Point to clean diagonal on Confusion Matrix. | Demonstrate Phase 1/2 training cells, explain frozen BatchNorm, present test metrics on 25,250 images, prove edge viability, and hand over to Kaveesha. |
 
 ---
 
 ## 2. Word-for-Word Spoken Presentation Script with Live Actions
 
-> **Delivery Tip:** Keep your webcam visible in the upper-right corner ($320 \times 180\text{ px}$). Use `Alt + Tab` smoothly between windows. Maintain a steady, confident cadence of ~140 words per minute.
+> **Delivery Tip:** Keep your webcam visible in the upper-right corner ($320 \times 180\text{ px}$). Use `Alt + Tab` smoothly between windows. Use your mouse cursor actively as a visual pointer to lead the examiner's eyes across each diagram and code block!
 
 ---
 
-### [05:15 – 06:00] Scene 8: Inverted Residuals & Linear Bottlenecks (Slide 8)
+### [05:15 – 06:00] Scene 8: Inverted Residuals & Linear Bottlenecks (Slide 8 / Figure 6.7)
 
-* **[ACTION: DISPLAY SLIDE 8 ON FULL SCREEN (OR REPORT FIGURE 6.7)]**  
+* **[ACTION: DISPLAY SLIDE 8 OR REPORT FIGURE 6.7 ON FULL SCREEN]**  
 * **[WEBCAM: Upper-right corner, looking directly into the camera lens]**
 
 > *"Thank you, Matheesha.*
 >
-> *While ResNet-50 achieves strong classification accuracy, deploying 24-million-parameter networks to battery-constrained mobile and IoT hardware is computationally prohibitive. For Member 3, I engineered and evaluated **MobileNetV2**.*
+> *While ResNet-50 achieves high classification accuracy, its 24-million-parameter footprint is computationally prohibitive for mobile and IoT devices. For Member 3, I engineered and evaluated **MobileNetV2**.*
 >
-> *Unlike classical residual networks that compress channels before convolution, MobileNetV2 introduces an **Inverted Residual** structure. It takes a thin, low-dimensional bottleneck, expands it by an expansion factor of six into high-dimensional space for expressive spatial filtering, and then projects it back down to a narrow bottleneck.*
+> *As shown here in **Figure 6.7**, MobileNetV2 inverts the classical residual paradigm through a **Narrow $\rightarrow$ Wide $\rightarrow$ Narrow** dataflow:*
 >
-> *Crucially, we enforce a **Linear Bottleneck**: non-linear activations like ReLU are strictly omitted from the final projection layer. In low-dimensional spaces, non-linearities irrevocably destroy the underlying manifold of interest. Removing ReLU preserves essential food texture representations while shortcut connections between thin bottlenecks dramatically reduce peak memory residency during inference."*
+> 1. *First, at the input bottleneck, an **expansion one-by-one convolution** **[POINT CURSOR TO FIRST BOX]** scales channel depth by a factor of six ($t=6$). This projects representations into a high-dimensional space for expressive spatial filtering.*
+> 2. *Next, a **three-by-three depthwise convolution** **[POINT CURSOR TO MIDDLE BOX]** performs lightweight spatial filtering on each channel independently.*
+> 3. *Then, a **pointwise one-by-one convolution** **[POINT CURSOR TO THIRD BOX]** projects the features back down to a compact bottleneck.*
+>
+> *Notice that this final projection is strictly **Linear—with NO ReLU activation**. In low-dimensional spaces, non-linear activations like ReLU destroy negative coordinates and collapse the underlying visual manifold. Keeping it linear preserves delicate food textures, while the residual skip connection **[TRACE TOP SHORTCUT ARROW]** connects the thin bottlenecks directly, drastically cutting memory bandwidth during mobile inference."*
 
 ---
 
 ### [06:00 – 06:45] Scene 9: Code Walkthrough & Depthwise Separable Math (VS Code / Slide 9)
 
-* **[ACTION: SWITCH TO VS CODE SHOWING `src/models/mobilenetv2.py` (LINES 30–75) OR SLIDE 9]**  
-* **[ACTION: HIGHLIGHT THE DEPTHWISE & POINTWISE CONVOLUTION IMPLEMENTATION]**
+* **[ACTION: SWITCH TO VS CODE SHOWING `src/models/mobilenetv2.py` (DOCSTRING & LINES 70–85) OR SLIDE 9]**  
+* **[ACTION: HIGHLIGHT DEPTHWISE SEPARABLE DEFINITION AND MATHEMATICAL FORMULA]**
 
-> *"Looking at our implementation in `src/models/mobilenetv2.py`, the core computational engine driving MobileNetV2 is **Depthwise Separable Convolution**, which completely decouples spatial filtering from channel correlation.*
+> *"Looking at our codebase in `src/models/mobilenetv2.py`, the core computational engine driving MobileNetV2 is **Depthwise Separable Convolution**, which completely decouples spatial filtering from channel mixing.*
 >
-> *A standard convolution performs both simultaneously, incurring heavy compute. MobileNetV2 factorizes this into two disciplined steps:*
+> *Standard convolution performs both operations simultaneously, incurring massive computational cost. MobileNetV2 factorizes this into two disciplined steps:*
 > 1. *First, a **depthwise convolution** applies a lightweight three-by-three spatial filter to each input channel independently.*
 > 2. *Second, a **pointwise one-by-one convolution** linearly combines these spatial features across channels.*
 >
-> *As documented in Section 6.3 of our report, this factorizes computational cost by roughly **one over N plus one over D-k squared**. For standard three-by-three kernels, this delivers an **eighty-eight to eighty-nine percent reduction in FLOPs** compared to standard convolutions, slashing total network parameters to just **2.39 million**."*
+> *As documented in Section 6.3 of our report and shown in this formula **[POINT TO MATH ON SCREEN]**, this factorizes computational cost by roughly **one over N plus one over D-k squared**. For three-by-three kernels where D-k is three, one over D-k squared is one-ninth—delivering an **eighty-eight to eighty-nine percent reduction in FLOPs** compared to standard convolutions, slashing our total network parameters to just **2.39 million**."*
 
 ---
 
 ### [06:45 – 07:45] Scene 10: Colab Live Execution, Results & Handover (Colab / Slide 10)
 
 * **[ACTION: SWITCH TO GOOGLE COLAB `notebooks/05_mobilenetv2.ipynb` — SCROLL TO STEP 5 & STEP 8]**  
-* **[ACTION: SHOW PHASE 1 & 2 CELLS, THEN DISPLAY FINAL TEST EVALUATION & `training_curves.png`]**
+* **[ACTION: POINT CURSOR TO TRAINING CURVES (`training_curves.png`) AND FINAL TEST EVALUATION METRICS]**
 
 > *"Here in our Google Colab training environment, you can see our standardized two-phase protocol:*
-> - *In **Phase 1**, training only the classification head with a frozen backbone reached **57.03%** validation accuracy.*
-> - *In **Phase 2**, unfreezing top inverted residual blocks fourteen through seventeen—from layer 120 onward—under a learning rate of ten-to-the-minus-five propelled validation accuracy to **64.73%**. Crucially, we kept Batch Normalization layers frozen to safeguard ImageNet population statistics.*
+> - *In **Phase 1** **[POINT TO PHASE 1 SECTION]**, training only the classification head with a frozen backbone reached **57.03%** validation accuracy.*
+> - *In **Phase 2** **[POINT TO DASHED LINE AT EPOCH 8 IN FIGURE 6.8]**, unfreezing top inverted residual blocks fourteen through seventeen—from layer 120 onward—under a learning rate of ten-to-the-minus-five propelled validation accuracy to **64.73%**. Crucially, we kept Batch Normalization layers frozen to safeguard ImageNet population statistics.*
 >
-> *On the quarantined, unseen Food-101 test set of twenty-five thousand two hundred and fifty images, MobileNetV2 achieved **68.69% Top-1 Accuracy** and **90.15% Top-5 Accuracy**, with an impressive test loss of **1.1692** and macro F1 of **0.6862**.*
+> *On the quarantined, unseen Food-101 test set of twenty-five thousand two hundred and fifty images **[POINT TO TEST EVALUATION LOGS]**, MobileNetV2 achieved **68.69% Top-1 Accuracy** and **90.15% Top-5 Accuracy**, with an impressive test loss of **1.1692** and macro F1 of **0.6862**.*
 >
-> *With an uncompressed disk footprint of only **9.11 megabytes**—ten times lighter than ResNet-50—and superior parameter efficiency of **28.77% accuracy per million parameters**, MobileNetV2 proves exceptionally viable for on-device mobile nutrition apps.*
+> *As seen in the confusion matrix **[GLANCE AT CONFUSION MATRIX]**, errors follow a sharp diagonal. With an uncompressed disk footprint of only **9.11 megabytes**—ten times lighter than ResNet-50—and superior parameter efficiency of **28.77% accuracy per million parameters**, MobileNetV2 proves exceptionally viable for on-device mobile nutrition apps.*
 >
 > *I will now hand over to Kaveesha to present our compound scaling findings with EfficientNetB0 and synthesize our master comparative evaluation."*
 
@@ -84,6 +88,7 @@ Practice these exact scientific phrases aloud to ensure fluent, confident delive
 | **$t=6$** | *"expansion factor of six"* |
 | **$3 \times 3$ and $1 \times 1$** | *"three-by-three and one-by-one"* |
 | **$\frac{1}{N} + \frac{1}{D_k^2}$** | *"one over N plus one over D-k squared"* |
+| **$\frac{1}{9} \approx 11.1\%$** | *"one-ninth, roughly eleven percent"* |
 | **$\approx 88\text{--}89\%$** | *"eighty-eight to eighty-nine percent"* |
 | **2,387,365** | *"two-point-three-nine million"* |
 | **$\eta = 10^{-5}$** | *"ten to the minus five"* |
@@ -128,5 +133,5 @@ The examiners will evaluate your individual technical depth using your report (S
   - Webcam source: Picture-in-picture in upper-right corner ($320 \times 180\text{ px}$).
   - Audio filters: RNNoise suppression and Limiter (-1.0 dB).
 - [ ] **Timer:** Phone or desk timer set to exactly **2:30**.
-- [ ] **Rehearsal:** Read through the script out loud 2 times while practicing the `Alt + Tab` window transitions. Verify that your delivery lands between **2:25 and 2:32**.
+- [ ] **Rehearsal:** Read through the script out loud 2 times while practicing the `Alt + Tab` window transitions and pointing your cursor. Verify that your delivery lands between **2:25 and 2:32**.
 - [ ] **Handoffs:** Practice receiving cleanly from Matheesha and handing over seamlessly to Kaveesha at 07:45.
