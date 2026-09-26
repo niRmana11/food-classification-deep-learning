@@ -1,0 +1,37 @@
+@startuml efficientnetb0_mbconv_se
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName Times New Roman
+skinparam defaultFontSize 11
+skinparam roundcorner 8
+
+title EfficientNetB0 MBConv Block with Squeeze-and-Excitation (SE) Attention
+
+rectangle "Input Feature Map x\n(h x w x C_in)" as in #f9f9f9
+
+package "MBConv Backbone" {
+  rectangle "1 x 1 Expansion Conv\nExpands to t * C_in (t=6)\nBatchNorm + Swish: f(x) = x * sigmoid(x)" as exp #ffffff
+  rectangle "k x k Depthwise Conv (k in {3, 5})\nSpatial filtering with stride s\nBatchNorm + Swish" as dw #ffffff
+}
+
+package "Squeeze-and-Excitation (SE) Channel Attention (r = 0.25)" {
+  rectangle "Squeeze: GlobalAveragePooling2D\nCompresses spatial dims -> (t * C_in,)" as sq #ffffff
+  rectangle "Excitation 1: Dense(0.25 * t * C_in) + Swish\nChannel reduction bottleneck" as ex1 #ffffff
+  rectangle "Excitation 2: Dense(t * C_in) + Sigmoid\nOutputs channel recalibration scale s in (0, 1)" as ex2 #ffffff
+}
+
+circle "(*) Channel Scale" as scale #ffffff
+circle "(+) Residual Add" as add #ffffff
+rectangle "Output Feature Map\n(h' x w' x C_out)" as out #f9f9f9
+
+in --> exp : Expand
+exp --> dw : Spatial Filter
+dw --> sq : Spatial Compression
+sq --> ex1 : Bottleneck
+ex1 --> ex2 : Sigmoid Gate
+dw --> scale : Original Features
+ex2 --> scale : Channel Gates s_c
+scale --> add : Recalibrated Features
+in --> add : Identity Shortcut (s=1, C_in==C_out)
+add --> out : MBConv Output
+@enduml
