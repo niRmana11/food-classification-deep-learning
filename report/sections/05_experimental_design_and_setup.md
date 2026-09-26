@@ -1,6 +1,6 @@
 # Section 5: Experimental Design and Setup
 
-**Authors:** Kaveesha (Member 4) & Matheesha Weerakoon (Member 2)  
+**Authors:** Kaveesha Athukorala (Member 4) & Matheesha Weerakoon (Member 2)  
 **Assigned Workstream:** Controlled Experimental Protocol, Hardware Profiling, Optimization Framework  
 **Academic Module:** SE4050 — Deep Learning (2026)  
 **Institution:** Sri Lanka Institute of Information Technology (SLIIT)  
@@ -99,7 +99,7 @@ The computational host specifications utilized throughout this research comprise
 - **Deep Learning Framework:** TensorFlow 2.17.0 / Keras 3.4.1, cuDNN 8.9.7, Python 3.10.12
 
 ### 5.3.2 Pre-Training Feasibility and Memory Headroom Profiling
-Prior to launching full-scale model training, an empirical feasibility profiling benchmark was executed (`notebooks/02_benchmark_dataloader.ipynb`) to verify pipeline throughput and memory stability under continuous GPU allocation.
+Prior to launching full-scale model training, an empirical feasibility profiling benchmark was executed (`notebooks/02_gpu_benchmark.ipynb`) to verify pipeline throughput and memory stability under continuous GPU allocation.
 
 ```
 ================================================================================
@@ -138,6 +138,22 @@ The pipeline enforces three architectural optimizations:
 1. **Vectorized Bilinear Resizing:** Image decoding and spatial resizing are fused into parallel map operations executing across CPU threads (`num_parallel_calls = tf.data.AUTOTUNE`).
 2. **Pre-Shuffled Index Manifests:** To resolve the severe non-i.i.d. streaming shuffle buffer failure discovered during initial trials (detailed in Section 8.2), dataset manifests are pre-shuffled at the Python filesystem level (`seed=42`) before being ingested into TensorFlow's 2,048-element streaming buffer.
 3. **Double-Buffered Asynchronous Prefetching (`prefetch(AUTOTUNE)`):** While the GPU computes forward and backward passes on mini-batch $k$, the host CPU concurrently prepares, augments, and batches mini-batch $k+1$ in background host memory, eliminating GPU starvation.
+
+### 5.3.4 Reproducibility and Seed Control
+
+A single seed, $S = 42$, is declared in `configs/config.yaml` and applied at every point at which randomness enters the experiment:
+
+| Stochastic process | Control mechanism |
+| :--- | :--- |
+| Train/validation partition | Deterministic split written once to `data/splits/*.txt`; **the manifests themselves are version-controlled**, so every member consumes byte-identical partitions |
+| Manifest pre-shuffle | `random.Random(42).shuffle(samples)` — declusters the class-sorted manifest |
+| Mini-batch shuffling | `dataset.shuffle(buffer_size=2048, seed=42)` |
+| Classification-head initialisation | `tf.keras.utils.set_random_seed(42)` before model construction |
+| Augmentation sampling | Keras preprocessing layers, seeded by the global seed |
+
+Committing the split *manifests* rather than the splitting *code* is the stronger reproducibility guarantee: it removes any dependence on library version, platform, or filesystem iteration order, and it is what allowed four members working on four separate machines to train against provably identical data.
+
+**Acknowledged limitation.** Seed control does not make GPU training bit-wise deterministic. Several cuDNN kernels — notably the backward pass of convolution — use non-deterministic atomic accumulation, so the order of floating-point summation varies between runs. Exact reproducibility would require `tf.config.experimental.enable_op_determinism()`, at a throughput cost the Colab session budget did not permit. Re-executing any experiment in this report should therefore reproduce the reported metrics to approximately $\pm 0.3$ percentage points rather than exactly. This is disclosed explicitly; it does not affect the comparative conclusions, whose effect sizes (3.72 to 15.57 pp) exceed the run-to-run variance by an order of magnitude.
 
 ---
 
@@ -261,15 +277,33 @@ To evaluate the viability of each architecture for practical deployment across c
 1. **Parameter Complexity ($P_{\text{total}}$ and $P_{\text{trainable}}$):** The total number of parameters and the subset of weights updated during Phase 2 fine-tuning.
 2. **Model Storage Footprint ($\text{Size}_{\text{MB}}$):** The physical disk footprint of the serialized single-precision (Float32) weight tensor file in megabytes (MB) and mebibytes (MiB).
 3. **Training Wall-Clock Duration ($T_{\text{train}}$):** Cumulative execution time in seconds and hours required to complete both Phase 1 and Phase 2 training on the Colab Tesla T4 GPU.
-4. **Inference Latency ($L_{\text{inf}}$):** Average wall-clock inference duration per image measured in milliseconds (ms). Latency profiling is conducted on the Tesla T4 GPU across 1,000 unseen test samples using a standardized warmup protocol (50 warmup iterations) to eliminate initial CUDA kernel initialization overhead:
+4. **Inference Latency ($L_{\text{inf}}$):** Average wall-clock inference duration per image in milliseconds, measured on the Tesla T4 across 1,000 unseen test samples with warm-up iterations discarded to eliminate CUDA kernel-initialisation overhead:
    
    $$L_{\text{inf}} = \frac{1}{M} \sum_{m=1}^M \left( t_{\text{end}}^{(m)} - t_{\text{start}}^{(m)} \right) \times 1000 \quad [\text{ms/image}]$$
+   
+   **Reported latency is withheld from the comparative tables.** The four values logged in the individual `metrics.json` files were captured before this protocol was standardised, and are consequently not mutually comparable: MobileNetV2 — the smallest pretrained model in the benchmark — records 167.29 ms/image against ResNet-50's 10.98 ms/image, an ordering that is physically impossible and identifies the figures as an instrumentation artefact rather than a result. EfficientNetB0 is the only component that logged both variants, at 13.43 ms/image batched against 342.26 ms/image at batch size 1, which demonstrates the $25\times$ spread a protocol change alone can produce. Publishing the four values side by side would appear to refute Hypothesis 2 (edge efficiency) on the strength of a measurement error, so Section 7 excludes latency pending a single-session re-profiling. The routine implementing the protocol above is provided in `notebooks/07_comparative_eval.ipynb` and requires access to all four trained checkpoints.
 
 5. **Generalization Gap ($\Delta_{\text{gen}}$):** The absolute divergence between final training accuracy and validation accuracy:
    
    $$\Delta_{\text{gen}} = |\text{Accuracy}_{\text{train}} - \text{Accuracy}_{\text{val}}|$$
    
    A small generalization gap ($\Delta_{\text{gen}} < 5\%$) signifies balanced generalization, whereas large gaps ($\Delta_{\text{gen}} > 10\%$) indicate overfitting.
+
+### 5.5.5 Aggregation Identities Under Balanced Support
+
+Because every split in this study is exactly class-balanced — 675 training, 75 validation and 250 test images per class, verifiable from `data/splits/` — two identities hold exactly, and the reader should recognise them as structural rather than coincidental.
+
+First, macro-averaging and weighted-averaging coincide. Weighted-averaging weights each class by its support $n_k$, so when all supports are equal:
+
+$$n_k = n \;\; \forall k \;\; \Longrightarrow \;\; \text{Weighted-}F1 = \frac{\sum_k n_k F1_k}{\sum_k n_k} = \frac{n \sum_k F1_k}{K n} = \frac{1}{K}\sum_k F1_k = \text{Macro-}F1$$
+
+Second, and more usefully, **macro-recall equals Top-1 accuracy exactly**. Since $\sum_k TP_k$ is precisely the number of correct predictions:
+
+$$\text{Macro-Recall} = \frac{1}{K}\sum_{k=1}^{K} \frac{TP_k}{250} = \frac{\sum_k TP_k}{101 \times 250} = \frac{\sum_k TP_k}{N_{\text{test}}} = \text{Top-1 Accuracy}$$
+
+This is why, in the Section 7 results, every model's macro-recall matches its Top-1 accuracy to four decimal places — EfficientNetB0 at 0.7726 against 77.26%, ResNet-50 at 0.7354 against 73.54%, and so on. It is a consequence of balanced support, not a transcription error.
+
+**Macro-precision carries no such identity**, because its denominators are *predicted* counts, which are not balanced. The divergence between macro-precision and macro-recall is therefore informative in its own right: it indicates whether a model systematically over- or under-predicts particular categories.
 
 ---
 
@@ -286,9 +320,9 @@ Table 5.2 consolidates the final hyperparameter and training configurations impl
 | **Input Shape** | $224 \times 224 \times 3$ | $224 \times 224 \times 3$ | $224 \times 224 \times 3$ | $224 \times 224 \times 3$ |
 | **Batch Size ($B$)** | 32 | 32 | 32 | 32 |
 | **Loss Function** | Sparse Categorical CE | Sparse Categorical CE | Sparse Categorical CE | Sparse Categorical CE |
-| **Phase 1 Epochs** | — (Single Phase) | 6 epochs ($\eta = 10^{-3}$) | 6 epochs ($\eta = 10^{-3}$) | 8 epochs ($\eta = 10^{-3}$) |
-| **Phase 2 Epochs** | 20 epochs ($\eta = 10^{-3}$) | 14 epochs ($\eta = 10^{-5}$) | 14 epochs ($\eta = 10^{-5}$) | 10 epochs ($\eta = 10^{-5}$) |
-| **Total Completed Epochs** | 20 | 20 | 20 | 18 (Early Stopped) |
+| **Phase 1 Epochs** | — (Single Phase) | 6 epochs ($\eta = 10^{-3}$) | 8 epochs ($\eta = 10^{-3}$) | 8 epochs ($\eta = 10^{-3}$) |
+| **Phase 2 Epochs** | 20 epochs ($\eta = 10^{-3}$) | 14 epochs ($\eta = 10^{-5}$) | 12 epochs ($\eta = 10^{-5}$) | 10 epochs ($\eta = 10^{-5}$) |
+| **Total Completed Epochs** | 20 | 20 | 20 | 18 (epoch budget reached) |
 | **Unfrozen Fine-Tuning Depth** | All layers (scratch) | Stage 5 (`conv5_block1_out`) | Top blocks (Layer 120+) | Blocks 6, 7 & Top Conv |
 | **Classification Head** | GAP $\to$ Drop(0.4) $\to$ Dense | GAP $\to$ BN $\to$ Drop(0.3) $\to$ Dense | GAP $\to$ Drop(0.2) $\to$ Dense | GAP $\to$ BN $\to$ Drop(0.3) $\to$ Dense |
 | **Total Parameters** | 678,085 | 23,802,853 | 2,387,365 | 4,184,072 |
@@ -296,3 +330,23 @@ Table 5.2 consolidates the final hyperparameter and training configurations impl
 | **Float32 Weights Size** | 2.59 MiB | 90.80 MiB | 9.11 MiB | 15.96 MiB |
 | **Preprocessing Scaling** | $x / 255.0 \to [0, 1]$ | Caffe BGR Mean Subtraction | $(x / 127.5) - 1 \to [-1, 1]$ | Pass-Through ($[0, 255]$) |
 | **Target Hardware** | Colab Tesla T4 GPU | Colab Tesla T4 GPU | Colab Tesla T4 GPU | Colab Tesla T4 GPU |
+
+Phase boundaries in the table are derived from the recorded learning-rate schedules in each model's `history.csv`, which is the authoritative record of what actually executed.
+
+---
+
+## 5.7 Threats to Validity
+
+A controlled design is only as credible as its account of where control was imperfect. Five departures are recorded here so that a reader can calibrate the precision of the reported figures.
+
+1. **Unequal epoch budgets.** ResNet-50, MobileNetV2 and the Custom CNN each completed 20 epochs; EfficientNetB0 completed 18. More consequentially, EfficientNetB0's validation loss was **still decreasing on its final epoch** ($1.0924 \rightarrow 1.0809$) and `EarlyStopping` never triggered — training ended because the configured epoch budget was exhausted, not because performance had plateaued. Its reported 77.26% Top-1 is therefore a **lower bound**, and its margin over ResNet-50 is, if anything, understated.
+
+2. **Unequal phase-transition points.** Phase 2 fine-tuning began at epoch 7 for ResNet-50 but at epoch 9 for MobileNetV2 and EfficientNetB0. Each member selected the transition from their own Phase 1 validation plateau, which is methodologically defensible but means the fine-tuning budgets were not identical across models.
+
+3. **Divergent regularisation and callback settings.** Head dropout rates range from 0.2 to 0.4, and `EarlyStopping` patience from 4 to 5, reflecting per-architecture tuning on the validation split rather than a single locked value.
+
+4. **Label-noise asymmetry between splits.** The Food-101 training partition retains approximately 20% web-crawl label noise by design, whereas the test partition was manually cleaned (Bossard et al., 2014). Because the validation split is carved from the noisy training partition, validation metrics are systematically pessimistic relative to test metrics. This is a property of the dataset rather than a flaw in the protocol, and it is visible as a **consistent test-over-validation gap of +3.96 to +4.57 pp across all four architectures** — a shared effect that could not plausibly arise from four independent per-model errors.
+
+5. **Non-deterministic GPU kernels**, as detailed in Section 5.3.4.
+
+None of these threatens the headline comparative conclusions, whose effect sizes substantially exceed the uncertainty each introduces. They define the highest-value directions for future work in Section 9.
