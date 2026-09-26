@@ -1,0 +1,28 @@
+@startuml mobilenetv2_inverted_residual
+skinparam monochrome true
+skinparam shadowing false
+skinparam defaultFontName Times New Roman
+skinparam defaultFontSize 11
+skinparam roundcorner 8
+
+title MobileNetV2 Inverted Residual Block with Linear Bottleneck (t = 6)
+
+rectangle "Input Low-Dim Bottleneck x\n(e.g., 28 x 28 x 32)" as in #f9f9f9
+
+package "Inverted Bottleneck Operations" {
+  rectangle "1 x 1 Expansion Convolution\nExpands channels by factor t=6 (32 -> 192)\nBatchNorm + ReLU6" as exp #ffffff
+  rectangle "3 x 3 Depthwise Convolution\nPer-channel spatial filtering (192 channels)\nBatchNorm + ReLU6" as dw #ffffff
+  rectangle "1 x 1 Linear Pointwise Bottleneck\nProjects 192 -> 32 channels\nBatchNorm (NO non-linearity: Linear Manifold)" as proj #ffffff
+}
+
+circle "(+) Addition" as add #ffffff
+rectangle "Output Bottleneck\n(28 x 28 x 32)" as out #f9f9f9
+
+in --> exp : Channel Expansion (t=6)
+exp --> dw : Spatial Filtering
+dw --> proj : Linear Projection
+
+in --> add : Residual Shortcut (when Stride 1 and C_in == C_out)
+proj --> add : F(x)
+add --> out : Output
+@enduml
